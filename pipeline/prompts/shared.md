@@ -25,3 +25,12 @@ The only exception is a written requirement deviation (README "Requirement devia
 - Only read files inside the current working directory. Never open, list or search anything outside it, and never use `file://` URLs.
 - Inside it, do not read `PLAN.md` or anything under `pipeline/`: they belong to the pipeline that runs you, not to the project.
 - `requirements/homework.md` is the original requirement text. It is read-only.
+
+<!-- block:ENVIRONMENT -->
+## Environment facts (measured by the pipeline on the machine that runs the local gate)
+
+- Local machine: macOS 26 on Apple Silicon (arm64), Node {{NODE_VERSION}}. CI runs on GitHub-hosted Linux runners.
+- With `@playwright/test` 1.39.0, the browser builds behave like this on the LOCAL machine:
+  - Chromium (build 1084, Chromium 119) crashes at launch (`SEGV_ACCERR`), headless and headed. Tests that use Chromium cannot pass locally.
+  - Firefox (118.0.1) and WebKit (17.4) launch and work.
+- The pipeline's local gate must pass before anything is merged, so every test must be runnable locally. Which browser(s) the project uses is a project decision: make it, record it with its reason, and keep it consistent between local runs and CI.

@@ -33,7 +33,7 @@ const MODELS = {
   reviewer: process.env.REVIEWER_MODEL, // undefined = the CLI's default
 };
 const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MIN ?? 30) * 60_000;
-const TURNS = { analyst: 40, coder: 80, acceptance: 40, reviewer: 40 };
+const TURNS = { analyst: 50, coder: 120, acceptance: 40, reviewer: 40 }; // dry run 1: Case 0 coder used 79 of 80
 
 const PIPE = import.meta.dirname;
 const CHECKOUT = resolve(PIPE, "..");
@@ -64,6 +64,9 @@ const ajvErrors = (v: any) => (v.errors ?? []).map((e: any) => `${e.instancePath
 const codexReviewSchema = join(OUT, "review.codex.schema.json");
 { const { $schema, $id, title, ...rest } = SCHEMA.review; writeFileSync(codexReviewSchema, JSON.stringify(rest, null, 2)); }
 const acceptanceJsonSchema = (() => { const { $schema, $id, title, ...rest } = SCHEMA.acceptance; return rest; })();
+const claudeReviewSchema = (() => { const { $schema, $id, title, ...rest } = SCHEMA.review; return rest; })();
+const CLAUDE_REVIEWER_MODEL = process.env.CLAUDE_REVIEWER_MODEL ?? "sonnet"; // fallback when Codex is out of usage
+let codexUnavailable = "";
 
 // ── Prompts ──────────────────────────────────────────────────────────────────
 const prompt = (name: string) => readFileSync(join(PIPE, "prompts", `${name}.md`), "utf8");
@@ -78,6 +81,8 @@ function render(template: string, vars: Record<string, string>): string {
   });
   return out;
 }
+// Facts about the gate machine the agents can't measure themselves (dry run 1: Chromium 119 crashes on macOS 26).
+const ENV_BLOCK = render(SHARED.ENVIRONMENT, { NODE_VERSION: process.version });
 
 // ── Requirements ─────────────────────────────────────────────────────────────
 type CaseDef = { id: number; title: string; slug: string; text: string; stepIds: string[] };
@@ -166,7 +171,7 @@ ${c.flaky.length ? `\n**Flaky:** ${c.flaky.join(", ")}\n` : ""}${c.denials.lengt
   writeFileSync(join(OUT, "report.md"), `# Pipeline run ${STAMP}
 
 Outcome: ${outcome}
-Mode: local (no --merge) · Cases: ${CASE_IDS.join(", ")} · Base: \`${BASE.slice(0, 9)}\` · Models: analyst ${MODELS.analyst}, coder ${MODELS.coder}, reviewer ${REVIEWER}${MODELS.reviewer ? ` ${MODELS.reviewer}` : ""}, acceptance ${MODELS.acceptance}
+Mode: local (no --merge) · Cases: ${CASE_IDS.join(", ")} · Base: \`${BASE.slice(0, 9)}\` · Models: analyst ${MODELS.analyst}, coder ${MODELS.coder}, reviewer ${REVIEWER}${MODELS.reviewer ? ` ${MODELS.reviewer}` : ""}${codexUnavailable ? ` (→ claude ${CLAUDE_REVIEWER_MODEL} after Codex failed)` : ""}, acceptance ${MODELS.acceptance}
 
 ${renderTable(rows)}
 
@@ -380,7 +385,7 @@ const DENY = [
 const READ_ONLY_DENY = [...DENY, "Edit", "Write", "NotebookEdit"];
 const ROLE_ARGS = {
   analyst: ["--permission-mode", "acceptEdits", "--allowedTools", "Read", "Write", "Edit", "Glob", "Grep",
-    "Bash(curl:*)", "Bash(mkdir:*)", "Bash(date:*)", "Bash(npm view:*)", ...cleanEnvArgs(DENY)],
+    "Bash(curl:*)", "Bash(mkdir:*)", "Bash(date:*)", "Bash(npm view:*)", "Bash(node -v)", "Bash(node --version)", "Bash(npm -v)", ...cleanEnvArgs(DENY)],
   coder: ["--permission-mode", "acceptEdits", "--allowedTools", "Read", "Write", "Edit", "Glob", "Grep",
     "Bash(npx playwright test:*)", "Bash(npx playwright install:*)", "Bash(npx tsc:*)", "Bash(npm install:*)",
     "Bash(npm ci:*)", "Bash(npm test:*)", "Bash(npm run test:*)", "Bash(mkdir:*)", "Bash(ls:*)", "Bash(git status:*)",
@@ -431,7 +436,7 @@ function runAnalyst(c: CaseState): any {
     CASE_ID: String(id), CASE_TITLE: c.def.title, CASE_TEXT: c.def.text, STEP_IDS: c.def.stepIds.join(", "),
     TOOLS_NOTE: analystToolsNote(id), TODAY: new Date().toISOString().slice(0, 10), FILES: projectFiles(),
     EARLIER_SPECS: earlierSpecs(id), SPEC_SCHEMA: JSON.stringify(SCHEMA.spec, null, 2),
-  }) + `\n\n${SHARED.ISOLATION}\n\n${SHARED.UNATTENDED}`;
+  }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
   const from = head();
   let r = track(c, claude({ step: `Case ${id} › Analyst`, prompt: base, cwd: WT, logBase: join(caseDir(id), "analyst"),
     args: ROLE_ARGS.analyst, model: MODELS.analyst, maxTurns: TURNS.analyst, timeoutMs: TIMEOUT_MS }));
@@ -470,7 +475,7 @@ This is Case 0: you create the project skeleton every later case builds on: \`pa
   return render(prompt("coder"), {
     CASE_ID: String(id), CASE_TITLE: c.def.title, CASE_TEXT: c.def.text, SPEC_JSON: JSON.stringify(spec, null, 2),
     CONVENTIONS, ALLOWED_PATHS: allowed, CASE0_NOTE: case0, ALLOWED_COMMANDS: CODER_COMMANDS, TEST_FILTER: `tests/case-${id}-`,
-  }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\n\n${SHARED.UNATTENDED}`;
+  }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
 }
 
 function review(c: CaseState, round: number, spec: any, caseBase: string, coderSummary: string, g: GateResult, changes: string, label: string): Review {
@@ -480,12 +485,23 @@ function review(c: CaseState, round: number, spec: any, caseBase: string, coderS
     CONVENTIONS, CODER_SUMMARY: coderSummary, GATE: g.text, DIFF: diffFor(caseBase),
     ROUND_NOTE: round > 1 ? "This is a RE-REVIEW after fixes: check the fixes themselves, do not repeat resolved issues." : "",
     CHANGES: changes ? `\n# Changes since the previous test run (judge each one)\n${changes}\n- A test that flipped pass → fail is fine only if it was tightened and now correctly shows a site issue; otherwise it is a HIGH test issue.\n- A removed test is a HIGH test issue unless it was a duplicate or genuinely wrong.\n` : "",
-  }) + `\n\n${SHARED.ISOLATION}\nYou run unattended: never ask questions. Your whole reply is the JSON object.`;
+  }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions. Your whole reply is the JSON object.`;
   const logBase = join(caseDir(id), `review-${label}`);
-  const r = REVIEWER === "codex"
-    ? codex({ step: `Case ${id} › Reviewer ${label}`, prompt: p, cwd: WT, logBase, schemaFile: codexReviewSchema, model: MODELS.reviewer, timeoutMs: TIMEOUT_MS })
-    : claude({ step: `Case ${id} › Reviewer ${label}`, prompt: p, cwd: WT, logBase, args: ROLE_ARGS.reviewer,
-      model: MODELS.reviewer, maxTurns: TURNS.reviewer, timeoutMs: TIMEOUT_MS, jsonSchema: SCHEMA.review });
+  const viaClaude = (base: string) => claude({ step: `Case ${id} › Reviewer ${label}`, prompt: p, cwd: WT, logBase: base, args: ROLE_ARGS.reviewer,
+    model: REVIEWER === "claude" ? MODELS.reviewer : CLAUDE_REVIEWER_MODEL, maxTurns: TURNS.reviewer, timeoutMs: TIMEOUT_MS, jsonSchema: claudeReviewSchema });
+  let r: AgentResult;
+  if (REVIEWER === "codex" && !codexUnavailable) {
+    try {
+      r = codex({ step: `Case ${id} › Reviewer ${label}`, prompt: p, cwd: WT, logBase, schemaFile: codexReviewSchema, model: MODELS.reviewer, timeoutMs: TIMEOUT_MS });
+    } catch (e) {
+      if (!(e instanceof AgentError)) throw e;
+      // Codex on a free plan runs out of usage: fall back to Claude for the rest of the run, and say so.
+      codexUnavailable = (e as Error).message.slice(0, 300);
+      c.notes.push(`Codex reviewer failed (${codexUnavailable}); Claude ${CLAUDE_REVIEWER_MODEL} reviews from here on`);
+      console.warn(`⚠️  Codex failed, falling back to the Claude reviewer for the rest of the run`);
+      r = viaClaude(`${logBase}-claude`);
+    }
+  } else r = viaClaude(logBase);
   track(c, r);
   let parsed: any = r.structured;
   if (!parsed) {
@@ -540,7 +556,7 @@ function runAcceptance(c: CaseState, attempt: number, caseBase: string, g: GateR
     SPEC_GAPS: c.specGaps.map((i) => `- ${i.file}: ${i.problem}`).join("\n") || "none",
     GATE: g.text.slice(0, 6000),
     TOOLS_NOTE: "Tools: read files (Read, Glob, Grep) and `curl` for one read-only re-check of a deviation's evidence. You cannot edit anything. Do not read specs/: judge against the original text.",
-  }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\nYou run unattended: never ask questions.`;
+  }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions.`;
   const r = track(c, claude({ step: `Case ${id} › Acceptance ${attempt}`, prompt: p, cwd: WT, logBase: join(caseDir(id), `acceptance-${attempt}`),
     args: ROLE_ARGS.acceptance, model: MODELS.acceptance, maxTurns: TURNS.acceptance, timeoutMs: TIMEOUT_MS, jsonSchema: acceptanceJsonSchema }));
   const a = r.structured as Acceptance | undefined;

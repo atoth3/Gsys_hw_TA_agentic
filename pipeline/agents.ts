@@ -22,11 +22,15 @@ export class Interrupted extends Error {
 }
 
 let interrupted = false;
+let firstSigint = 0;
 /** Ctrl+C reaches the agent child too (same process group): the child dies, we throw Interrupted after it. */
 export function installInterruptHandler() {
   process.on("SIGINT", () => {
-    if (interrupted) process.exit(130); // second Ctrl+C: give up immediately
+    // tsx (and npm) forward the terminal's SIGINT, so ONE Ctrl+C arrives two or three times within milliseconds.
+    // Only a second Ctrl+C at least 2 s later means "give up now, skip the report".
+    if (interrupted) { if (Date.now() - firstSigint > 2000) process.exit(130); return; }
     interrupted = true;
+    firstSigint = Date.now();
     console.error("\n⏹  Ctrl+C: stopping the running step, then writing report.md + manifest.json …");
   });
 }
@@ -248,7 +252,8 @@ export function runTests(cwd: string, jsonFile: string, extraArgs: string[], env
   rmSync(jsonFile, { force: true });
   const res = shTry("npx", ["playwright", "test", "--reporter=line,json", ...extraArgs], cwd,
     { ...process.env, ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: jsonFile, FORCE_COLOR: "0" });
-  const output = res.out.slice(-8000);
+  // FORCE_COLOR=0 doesn't reach worker stderr (browser logs): strip ANSI codes so reviewers get plain text.
+  const output = res.out.replace(/\x1b\[[0-9;]*m/g, "").slice(-8000);
 
   const statuses = new Map<string, TestStatus>();
   const skipReasons = new Map<string, string>();

@@ -84,10 +84,11 @@ Case 0 runs first and creates the project skeleton (`package.json`, `playwright.
 
 ### Contamination guard
 The manual solution lives next door in `../Gsys_hw_TA`. Agents **must not read it**: they'd copy it, and the comparison would be worthless. Prompts and `--allowedTools` alone aren't enough, because read tools can usually reach files outside the working folder without asking. So the guard has three layers:
-1. **Deny rules:** every Claude agent gets `--disallowedTools "Read(<abs path>/Gsys_hw_TA/**)" "Bash(*Gsys_hw_TA/*)" "Bash(*file://*)"` plus the same rules in the `permissions.deny` of its `--settings`. The trailing `/` matters: the run's own worktree is `../Gsys_hw_TA_agentic-run-<stamp>`, which a bare `*Gsys_hw_TA*` would also block. Codex runs with its working root set to the worktree.
+1. **Deny rules:** every Claude agent gets `--disallowedTools "Read(//<abs path>/Gsys_hw_TA/**)" "Bash(*Gsys_hw_TA/*)" "Bash(*file://*)"` plus the same rules in the `permissions.deny` of its `--settings`. Note the **double slash**: in Claude Code permission rules `//path` is an absolute path, while `/path` is relative to the settings file (verified during the build: `Read(//…/secret/**)` blocks the Read tool with "File is in a directory that is denied"). The trailing `/` matters: the run's own worktree is `../Gsys_hw_TA_agentic-run-<stamp>`, which a bare `*Gsys_hw_TA*` would also block. Codex runs with its working root set to the worktree; its read-only sandbox can still *read* outside it, so for Codex the audit (layer 3) is the real guard.
+   **Added during the build:** the same deny list also covers your own checkout (`Read(//<repo>/**)`, which holds earlier runs' logs) and, inside the run worktree, `PLAN.md` and `pipeline/**`. `PLAN.md` contains the "known traps" table (section 5), and an agent that reads it would be told the answers.
    The Analyst's Playwright MCP is limited to the case sites' `http(s)` origins (`analyst-mcp.json`), so it can't open `file://…/Gsys_hw_TA/`.
 2. **Prompt rule:** "Only read files inside the current working directory."
-3. **Audit:** after each agent call, the orchestrator searches the agent's transcript (JSON output and tool calls) for `Gsys_hw_TA/` without the `_agentic` suffix. A hit marks the run **contaminated** in `report.md`; it can still finish, but its results don't count for the comparison.
+3. **Audit:** after each agent call, the orchestrator searches the agent's transcript for the manual solution's path: `Gsys_hw_TA` **not** followed by a word character or `-` (regex `/Gsys_hw_TA(?![\w-])/`, so `../Gsys_hw_TA` without a slash is caught too, while `Gsys_hw_TA_agentic…` is not). It checks only what the agent **asked for**: Claude's `tool_use` inputs (from `--output-format stream-json --verbose`) and Codex's command events (`--json`). Searching tool *results* would give false hits whenever a repo file mentions the folder. A hit marks the run **contaminated** in `report.md`; it can still finish, but its results don't count for the comparison.
 
 After the run, we compare the two solutions ourselves (section 9).
 
@@ -139,14 +140,15 @@ After the run, we compare the two solutions ourselves (section 9).
 **Job:** implement the refined spec as Playwright tests.
 
 - **Input:** refined spec (md + json), the **original** case text (so it can't drift from the source), the project skeleton.
-- **Tools:** `--permission-mode acceptEdits`, allow-list `Bash(npx playwright test:*)`, `Bash(npx tsc:*)`. Editable paths: `tests/`, `pages/`, `test/resources/`, `utils/`, and its own case subsection of the README's **"CI limitations"** (section 4c). In Case 0 only, also the config files, `.github/workflows/` and the "how to run" part of `README.md` (the skeleton comes from the orchestrator).
+- **Tools:** `--permission-mode acceptEdits`, allow-list `Bash(npx playwright test:*)`, `Bash(npx tsc:*)`, plus `npm install`/`npm ci`/`npm test` and `npx playwright install` (Case 0 must create the lockfile and browsers, Case 5 must add a library). Editable paths: `tests/`, `pages/`, `test/resources/`, `utils/`, **`package.json` + `package-lock.json` (every case: Case 5's "add Rest Api library" needs them; the pin check guards Playwright)**, and its own case subsection of the README's **"CI limitations"** (section 4c). In Case 0 only, also the config files, `.github/workflows/` and the "how to run" part of `README.md` (the README skeleton comes from the orchestrator).
 - **Output:** code + a summary + `STATUS: DONE | BLOCKED <reason>`.
 - **Conventions** (written once in `CONVENTIONS.md`, given to coder and reviewer): Page Object Model, role/text-based locators, no `waitForTimeout`, one spec file per case, test titles that start with the case ID, and the general CI-limitations rule from section 4c (no site named).
 
 ### ③ Gate (deterministic, in the orchestrator)
-1. `npx tsc --noEmit`: type errors stop the case.
-2. `npx playwright test tests/case-N*` with the JSON reporter: per-test status.
-3. `--repeat-each=3` on the new tests: a flaky test is treated as a failure, not "green 2 out of 3". (`performance_glitch_user` and guru99's ads make this case-relevant.)
+0. `npm ci` whenever the lockfile changed (so a lockfile that doesn't match `package.json` fails here, not first in CI), then `npx playwright install` once per run.
+1. `npx tsc --noEmit`: type errors are a **hard error**.
+2. + 3. **One run:** `npx playwright test tests/case-N- --repeat-each=3 --retries=0` with the line + JSON reporters. Per test: all repeats pass = passed, all fail = failed, mixed = **flaky**, treated as a failure, not "green 2 out of 3". (`performance_glitch_user` and guru99's ads make this case-relevant.) A case test that is *skipped* locally also makes the gate red (section 4c condition 1 needs a local pass).
+   **Hard errors** (tsc, broken suite, path guard, pin, deviation mismatch, actionlint) go straight back to the Coder as a fix round without calling the Reviewer: there is nothing worth reviewing yet. Such a round counts toward `MAX_ROUNDS`.
 4. Per-test diff against the previous run: tests that **flip pass → fail** or **disappear** are handed to the reviewer to judge (the Step 7 lesson: fewer passing tests isn't automatically a regression).
 5. Guard: `git diff --name-only` must stay inside the allowed paths (including the README subsection rule from section 6), and `package.json` must still pin `@playwright/test` to `1.39.0`.
 6. Deviation check (section 4b): spec `deviations[]` and README entries match one-to-one, and every evidence file exists.
@@ -166,6 +168,8 @@ After the run, we compare the two solutions ourselves (section 9).
   - `spec-gap`: the refined spec missed or weakened something from the original. The coder can't fix the spec, so these are passed to **Acceptance** as hints (⑤).
   - `site-issue`: the site really misbehaves against a requirement that's still meant (section 4b "not allowed" list). The test correctly fails; it's reported, not fixed.
 - **Loop:** only `high` **test** issues trigger another round. The fixer is the **coder resumed** (`--resume <session>`), so it remembers its own reasons. Stop when `ship=true` and no high test issue is open, or after `MAX_ROUNDS=3`.
+  **Added during the build:** a red gate that the Reviewer neither flags as a high test issue nor explains as a `site-issue` becomes a synthetic high issue ("the gate is red"), so a reviewer saying `ship=true` over failing tests can't end the loop.
+- **Contract:** Codex gets `--output-schema` (OpenAI's strict subset: `additionalProperties: false`, every property required, no `$schema`/`$id`/`title`, so the orchestrator writes a stripped copy). The Claude fallback and Acceptance use `claude -p --json-schema`, whose result arrives in `structured_output`. Both are validated again with `ajv`.
 
 ### ⑤ Acceptance (the Analyst again, as the final judge)
 **Job:** answer one question: *does the code fulfil the ORIGINAL requirement as written?*
@@ -264,6 +268,8 @@ main ─●─────────●──────────●──
 | CI → Merge | CI test report (JSON artifact) | every skipped test has a README CI-LIMIT entry, a matching reason, and a local pass (section 4c) |
 
 Every agent prompt includes the **UNATTENDED** block (never ask; decide and state; end with `STATUS: DONE | BLOCKED <reason>`; failing tests that expose a real mismatch are DONE, not BLOCKED) and the **ORACLE** rule (assert the documented requirement, never the site's current output).
+**Changed during the build:** the `STATUS:` line applies to the Analyst and Coder only. The Reviewer and Acceptance answer with a JSON object (schema-enforced), and a trailing status line would break it, so they get just "never ask questions". All prompts also get an **ISOLATION** block (only read inside the working directory; don't read `PLAN.md` or `pipeline/`). The blocks live in `pipeline/prompts/shared.md`.
+The Analyst gets **one repair attempt** (resumed session) when its spec breaks the contract (schema, step coverage, path guard, deviation check); a second failure fails the case.
 
 ## 4b. Requirement deviations (Analyst may amend, README records, Acceptance validates)
 
@@ -372,7 +378,9 @@ These are things I'd expect from the requirements and the sites. Don't put them 
      ai/<stamp>/case-1-purchase …         (from main, or from integration in local mode)
   runs/<stamp>/                        ← logs, manifest.json, report.md (in your checkout, gitignored)
   ```
-- **Clean agent environment:** `--settings '{"disableAllHooks": true}' --strict-mcp-config --disable-slash-commands`, so your global plugins and hooks don't leak in. The only MCP server allowed is Playwright MCP, and only for the Analyst (`--mcp-config analyst-mcp.json`).
+- **Clean agent environment:** `--setting-sources project --settings '{"disableAllHooks": true, "permissions": {"deny": […]}}' --strict-mcp-config --disable-slash-commands`, so your global plugins, hooks **and user-level allow rules** don't leak in (`--setting-sources project` was added during the build: without it a broad allow rule in your own `~/.claude/settings.json` would widen every agent's permissions).
+- **The run's worktree sits next to the main checkout**, even when the orchestrator runs from a Claude worktree under `.claude/worktrees/`: the path is derived from `git rev-parse --git-common-dir`.
+- **Local mode branches from the checkout's `HEAD`** (or `--base <ref>`), not from `main`, until the pipeline itself is merged into `main`. The only MCP server allowed is Playwright MCP, and only for the Analyst (`--mcp-config analyst-mcp.json`).
 - **Least privilege per role:**
 
 | Role | Edit files | Shell | Browser | Network |
@@ -475,7 +483,8 @@ The interesting output isn't only the tests. It's *how well the agentic workflow
 Gsys_hw_TA_agentic/
 ├── PLAN.md                     ← this file
 ├── requirements/homework.md    ← PDF transcribed, read-only for agents
-├── pipeline/
+├── pipeline/                   ← its OWN npm package (ajv, tsx): the root package.json belongs to the homework
+│   ├── package.json            ← run with `npm --prefix pipeline run orchestrate -- --cases 0,5`
 │   ├── orchestrator.ts         ← the loop, gates, contracts, report
 │   ├── agents.ts               ← claude()/codex() wrappers (from swarm.ts)
 │   ├── cleanup.ts              ← removes one run by its manifest (section 6)
@@ -540,6 +549,8 @@ The local gate proves the tests pass **on your Mac, with your browsers, through 
 
 ### Who writes it
 The **Coder in Case 0**, from requirement X1, like any other code. The Reviewer reviews it, the gate runs `actionlint`, and Acceptance checks it against X1. It's a good test of the pipeline too: will the agents pin versions, use least-privilege permissions, and upload reports? The checklist below goes into `CONVENTIONS.md` so the reviewer has something concrete to check.
+**Kept out of `CONVENTIONS.md` on purpose:** the `ubuntu-22.04` runner pin from the sketch. It is a section 5 trap, so the agents have to find it themselves.
+**`actionlint` isn't installed on this machine yet** (`brew install actionlint`). Until it is, the gate logs "workflow lint SKIPPED" as a warning instead of failing.
 
 ### What the workflow must do (checklist, not code)
 - **Triggers:** `pull_request` to `main` (every case PR), `push` to `main` (re-checks the merged result), `workflow_dispatch`.
