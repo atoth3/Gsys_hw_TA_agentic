@@ -38,7 +38,13 @@ _None._
 _None._
 
 ### Case 2
-_None._
+
+**D-2.6: Footer copyright year is the current year, not 2023**
+- **Original:** Validate the footer message contains 2023 and Terms of Service
+- **Amended:** Validate the footer message contains the copyright year of the current calendar year, derived at run time, and Terms of Service.
+- **Why the original can't be fulfilled:** On 2026-11-26 the footer message reads `© 2026 Sauce Labs. All Rights Reserved. Terms of Service | Privacy Policy`. The year is computed, not content: the site's only script bundle renders the line as `["© ", new Date().getFullYear(), " Sauce Labs. All Rights Reserved. Terms of Service | Privacy Policy"]`, and the literal `2023` occurs zero times in that bundle. The footer showed 2023 only during the calendar year 2023 and can never show it again.
+- **Why this amendment:** Only the year part of the step changes, and it changes to a value derived at run time rather than to today's hard-coded 2026, which would rot exactly as 2023 did. The "Terms of Service" half of the check stays exactly as written, and the check keeps its original strength: the footer must still carry the copyright year, taken from the same source the site uses.
+- **Evidence:** [`docs/evidence/case-2/footer-year.md`](docs/evidence/case-2/footer-year.md)
 
 ### Case 3
 _None._
