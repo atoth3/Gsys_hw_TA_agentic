@@ -1,6 +1,15 @@
 # Genesys homework: Playwright + TypeScript
 
-Automated tests for the Genesys TypeScript homework (`requirements/homework.md`), written by a local multi-agent pipeline (`pipeline/`, see `PLAN.md`).
+Automated tests for the Genesys TypeScript homework (`requirements/homework.md`), written by a local multi-agent pipeline. The pipeline is the main deliverable; the tests are its output.
+
+## How this was built
+
+The tests were written by a local multi-agent pipeline, not by hand, and reviewed by a human before submission. The full design and every lesson from 16+ runs are in [`PLAN.md`](PLAN.md); the pipeline code is in [`pipeline/`](pipeline/).
+
+- **Per case:** an **Analyst** (Claude Opus, with a browser) explores the live site and turns the original requirement into a spec, including documented deviations where a step can't be fulfilled as written. A **Coder** (Claude Sonnet) implements it. A deterministic **gate** runs `tsc`, the tests 3× (flaky = failed), the full suite, and checks (exact Playwright pin, no hard-coded hosts, spec ↔ README deviations). A **Reviewer** (Codex, a different model) and the Coder loop until it ships. A fresh **Acceptance** check compares the code with the *original* text, not the spec.
+- **The orchestrator is plain TypeScript, not an agent:** everything that decides pass/fail is deterministic.
+- **What the human did:** decided the open questions (Playwright 1.39.0 kept; built-in `request` client for Case 5), added the CI-LIMIT-4 runtime skip after the first CI run, and reviewed the result.
+- **Biggest lesson:** the first versions produced tests about 3× larger than needed (every requirement re-asserted, `test.step` everywhere, hosts hard-coded). Proportionality rules plus deterministic checks (rather than more prompting) brought the final code to the size of a hand-written solution.
 
 ## How to run
 
@@ -15,6 +24,8 @@ npm test
 All browser tests run on Firefox (one Playwright project per site, each with its own `baseURL`; Case 5 uses an `api` project): Playwright 1.39.0's Chromium build crashes at launch on Apple Silicon macOS, so Firefox (118.0.1, the build bundled with 1.39.0) is the browser that works identically on the local dev machine and on CI's `ubuntu-22.04` runner.
 
 CI (`.github/workflows/playwright.yml`) runs the same `npm test` script on every pull request to `main`, every push to `main`, on a nightly schedule, and on manual dispatch, against Node 18 (the minimum the homework names) on `ubuntu-22.04`.
+
+Note: `test/resources/credential.json` lives in `test/` because step 1.2 names that folder; the specs are in Playwright's usual `tests/`.
 
 ## Cases
 
@@ -93,13 +104,3 @@ _None._
 
 ### Case 5
 _None._
-
-## How this was built
-
-The tests were written by a local multi-agent pipeline, not by hand, and reviewed by a human before submission. The full design and every lesson from 16+ runs are in [`PLAN.md`](PLAN.md); the pipeline code is in [`pipeline/`](pipeline/).
-
-- **Per case:** an **Analyst** (Claude Opus, with a browser) explores the live site and turns the original requirement into a spec, including documented deviations where a step can't be fulfilled as written. A **Coder** (Claude Sonnet) implements it. A deterministic **gate** runs `tsc`, the tests 3× (flaky = failed), the full suite, and checks (exact Playwright pin, no hard-coded hosts, spec ↔ README deviations). A **Reviewer** (Codex, a different model) and the Coder loop until it ships. A fresh **Acceptance** check compares the code with the *original* text, not the spec.
-- **The orchestrator is plain TypeScript, not an agent:** everything that decides pass/fail is deterministic.
-- **What the human did:** decided the open questions (Playwright 1.39.0 kept; built-in `request` client for Case 5), added the CI-LIMIT-4 runtime skip after the first CI run, and reviewed the result.
-- **Biggest lesson:** the first versions produced tests about 3× larger than needed (every requirement re-asserted, `test.step` everywhere, hosts hard-coded). Proportionality rules plus deterministic checks (rather than more prompting) brought the final code to the size of a hand-written solution.
-- `test/resources/credential.json` lives in `test/` because step 1.2 names that folder; the specs are in Playwright's usual `tests/`.
