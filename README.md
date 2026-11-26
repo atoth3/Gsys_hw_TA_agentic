@@ -11,6 +11,31 @@ The tests were written by a local multi-agent pipeline, not by hand, and reviewe
 - **What the human did:** decided the open questions (Playwright 1.39.0 kept; built-in `request` client for Case 5), added the CI-LIMIT-4 runtime skip after the first CI run, and reviewed the result.
 - **Biggest lesson:** the first versions produced tests about 3× larger than needed (every requirement re-asserted, `test.step` everywhere, hosts hard-coded). Proportionality rules plus deterministic checks (rather than more prompting) brought the final code to the size of a hand-written solution.
 
+### Running the pipeline on a new requirement
+
+The pipeline is still tied to this homework's cases in a few places, so a new case (say Case 6) needs four edits before the run:
+
+1. **`requirements/homework.md`:** add the case in the same format: a `## Case 6 – <title>` heading (en dash) and bold step IDs (`- **6.1** …`). The parser in `pipeline/orchestrator.ts` only recognises this form.
+2. **`SLUGS` in `pipeline/orchestrator.ts`:** add a slug, e.g. `6: "login-api"`. It becomes part of the branch name.
+3. **`README.md`:** add `### Case 6` with `_None._` under both `## Requirement deviations` and `## CI limitations`. Agents may write only to their own subsections.
+4. **API-only case:** add its number to the no-browser check (`id === 0 || id === 5`) in `pipeline/orchestrator.ts`. Every other case gets a browser for the Analyst.
+
+Then run (several cases at once: `--cases 5,6`):
+
+```bash
+npm --prefix pipeline run orchestrate -- --cases 6
+```
+
+Models and rounds can be overridden with environment variables: `CODER_MODEL=opus REVIEWER=claude MAX_ROUNDS=2 npm --prefix pipeline run orchestrate -- --cases 6`.
+
+The report and logs go to `runs/<stamp>/`; the code goes to a separate worktree `../<repo>-run-<stamp>` on the branch `ai/<stamp>/integration`. Nothing is merged or pushed: review the branch and merge it yourself. Remove a run with:
+
+```bash
+npm --prefix pipeline run cleanup -- <stamp>
+```
+
+A different project (another site or document) also needs its own `CONVENTIONS.md`.
+
 ## How to run
 
 Requires Node 18 or newer.
