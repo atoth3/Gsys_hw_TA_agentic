@@ -1,5 +1,7 @@
 # Agentic Homework Pipeline: Plan
 
+> **Layout note (after the final run):** the workflow files were moved under `agentic/` (`agentic/pipeline/`, `agentic/specs/`, `agentic/requirements/`, `agentic/CONVENTIONS.md`, this file, run logs in `agentic/runs/`). Paths below are as they were during the runs; the test project stayed at the repo root.
+
 Goal: solve the Genesys TypeScript/Playwright homework (5 cases) **with a local multi-agent workflow** instead of by hand, then compare the result with the manual solution in `../Gsys_hw_TA`.
 
 It builds on the `ai-bootcamp` Step 7 swarm (`my-work/07-swarm/swarm.ts`): writer → reviewer ⇄ fixer, worktree isolation, STATUS contracts, deterministic test gates, and the oracle rule. This plan adds two new roles: an **Analyst** that explores and refines each requirement before any code is written, and an **Acceptance** check against the *original* wording at the end.

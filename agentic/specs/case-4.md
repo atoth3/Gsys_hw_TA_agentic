@@ -86,7 +86,7 @@ from the page's CSS, the page texts from the served HTML.
   at the very bottom of the document as first rendered). It comes from the page's **own served
   HTML** (`<form id="makeForm">`), occurs exactly once, and is visible without any interaction,
   though below the fold.
-  (Screenshot: [`docs/evidence/case-4/selenium-page-bottom-no-join-now.png`](../docs/evidence/case-4/selenium-page-bottom-no-join-now.png).)
+  (Screenshot: [`docs/evidence/case-4/selenium-page-bottom-no-join-now.png`](../../docs/evidence/case-4/selenium-page-bottom-no-join-now.png).)
 - `www.guru99.com` sits behind Cloudflare (a `__cf_bm` cookie is set); no bot challenge or
   interstitial was served to the exploration browser or to curl. The tutorial page shows no cookie
   banner and no fixed overlay that could intercept clicks.
@@ -130,11 +130,11 @@ from the page's CSS, the page texts from the served HTML.
 - **Amended:** Verify new page is loaded in new tab with title: Selenium Live Project for Practice
 - **Why the original can't be fulfilled:** The image in the iframe links to `www.guru99.com/live-selenium-project.html`, and on 2026-11-26 that page's title — in the browser and in the HTML served by curl — is `Selenium Live Project for Practice`. The string `FREE Real Time Project` occurs nowhere in the page, so the title the step names cannot be observed any more; the site renamed the page since the homework was written.
 - **Why this amendment:** Only the expected literal changes, to the title the same page carries today; the step keeps its subject (a new tab opened by the click of 4.2) and its strength (an exact title comparison). A runtime-derived expectation is not an option here: deriving the title from the page under test would make the assertion tautological.
-- **Evidence:** [`docs/evidence/case-4/new-tab-title.md`](../docs/evidence/case-4/new-tab-title.md)
+- **Evidence:** [`docs/evidence/case-4/new-tab-title.md`](../../docs/evidence/case-4/new-tab-title.md)
 
 **D-4.6: The Selenium page has no "Join Now" button any more**
 - **Original:** Verify the wide red Join Now button is displayed near bottom of the page
 - **Amended:** Verify the sign-up call-to-action button near the bottom of the page — the button labelled `Subscribe for Free` in the newsletter block — is displayed
 - **Why the original can't be fulfilled:** The page reached in 4.5 is `www.guru99.com/selenium-tutorial.html`, and on 2026-11-26 the string `Join Now` occurs zero times there, both in the served HTML and in the rendered text after the whole document is scrolled. Nothing near the bottom is a wide red button: the last call to action before the footer is the 270×52 px amber `Subscribe for Free` button, and the only red control in that region is an 85 px `Next →` link. The page was redesigned since the homework was written.
 - **Why this amendment:** The check keeps everything the step still allows — the same page, the same position (the last call to action before the footer), the same role (a free sign-up button) and the same strength (one is-displayed assertion on one named element). Only the element's identity moves to the button that occupies that place today, chosen because it is part of the page's own served HTML, while the one remaining wide red "join" button is injected by a third-party script and sits mid-page.
-- **Evidence:** [`docs/evidence/case-4/selenium-page-bottom-no-join-now.md`](../docs/evidence/case-4/selenium-page-bottom-no-join-now.md)
+- **Evidence:** [`docs/evidence/case-4/selenium-page-bottom-no-join-now.md`](../../docs/evidence/case-4/selenium-page-bottom-no-join-now.md)

@@ -1,6 +1,6 @@
 # Genesys homework: Playwright + TypeScript
 
-Automated tests for the Genesys TypeScript homework (`requirements/homework.md`), written by a local multi-agent pipeline (`pipeline/`, see `PLAN.md`).
+Automated tests for the Genesys TypeScript homework (`agentic/requirements/homework.md`), written by a local multi-agent pipeline (`agentic/pipeline/`, see `agentic/PLAN.md`).
 
 ## How to run
 

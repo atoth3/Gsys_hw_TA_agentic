@@ -1,11 +1,11 @@
 // Remove ONE pipeline run by its manifest (PLAN.md section 6).
 //
-//   npm --prefix pipeline run cleanup -- <stamp>              list, then ask
-//   npm --prefix pipeline run cleanup -- <stamp> --dry-run    list only
-//   npm --prefix pipeline run cleanup -- <stamp> --yes        no question
-//   npm --prefix pipeline run cleanup -- <stamp> --purge-logs also delete runs/<stamp>/
+//   npm --prefix agentic/pipeline run cleanup -- <stamp>              list, then ask
+//   npm --prefix agentic/pipeline run cleanup -- <stamp> --dry-run    list only
+//   npm --prefix agentic/pipeline run cleanup -- <stamp> --yes        no question
+//   npm --prefix agentic/pipeline run cleanup -- <stamp> --purge-logs also delete agentic/runs/<stamp>/
 //
-// Rules: list first, then delete. Exact names from runs/<stamp>/manifest.json, checked against what exists:
+// Rules: list first, then delete. Exact names from agentic/runs/<stamp>/manifest.json, checked against what exists:
 // no `ai/*` globbing, so it can never touch another run. Never touches main or merged work: it only PRINTS
 // `git revert` for case commits merged into main. Idempotent: removes only what is still there.
 import { execFileSync, spawnSync } from "node:child_process";
@@ -22,8 +22,8 @@ if (!stamp || !/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/.test(stamp)) {
   console.error("Usage: cleanup.ts <stamp> [--dry-run] [--yes] [--purge-logs]   (stamp like 2026-11-26T09-14-03)");
   process.exit(2);
 }
-const CHECKOUT = resolve(import.meta.dirname, "..");
-const runDir = join(CHECKOUT, "runs", stamp);
+const CHECKOUT = resolve(import.meta.dirname, "../..");
+const runDir = join(CHECKOUT, "agentic", "runs", stamp);
 const manifestFile = join(runDir, "manifest.json");
 if (!existsSync(manifestFile)) { console.error(`No manifest: ${manifestFile}`); process.exit(1); }
 const m = JSON.parse(readFileSync(manifestFile, "utf8"));

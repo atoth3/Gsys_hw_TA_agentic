@@ -63,7 +63,7 @@ own behaviour or the page's CSS, not from a browser-specific API.
   press Underline. Result: `<p><strong>Automation</strong> <u>Test</u> Example</p>`, the editing
   area's text exactly `Automation Test Example`. Computed styles: `Automation` font-weight 700 and
   text-decoration none, `Test` text-decoration underline and font-weight 400.
-  (Screenshot: [`docs/evidence/case-3/editor-formatted-text.png`](../docs/evidence/case-3/editor-formatted-text.png).)
+  (Screenshot: [`docs/evidence/case-3/editor-formatted-text.png`](../../docs/evidence/case-3/editor-formatted-text.png).)
 - **Verified sequence B (toggle formats while typing)** — Bold on, type `Automation`, Bold off, type
   a space, Underline on, type `Test`, Underline off, type ` Example` — looks identical but leaves
   **seven zero-width U+2060 WORD JOINER fillers** right after the underlined word: the text reads

@@ -30,7 +30,7 @@ Return ONLY raw JSON matching this shape, no markdown fences:
 
 {{CASE_TEXT}}
 
-# Refined spec (specs/case-{{CASE_ID}}.json)
+# Refined spec (agentic/specs/case-{{CASE_ID}}.json)
 
 ```json
 {{SPEC_JSON}}

@@ -23,8 +23,8 @@ The only exception is a written requirement deviation (README "Requirement devia
 ## Working area
 
 - Only read files inside the current working directory. Never open, list or search anything outside it, and never use `file://` URLs.
-- Inside it, do not read `PLAN.md` or anything under `pipeline/`: they belong to the pipeline that runs you, not to the project.
-- `requirements/homework.md` is the original requirement text. It is read-only.
+- Inside it, do not read `agentic/PLAN.md` or anything under `agentic/pipeline/`: they belong to the pipeline that runs you, not to the project.
+- `agentic/requirements/homework.md` is the original requirement text. It is read-only.
 
 <!-- block:PROPORTIONALITY -->
 ## Proportionality

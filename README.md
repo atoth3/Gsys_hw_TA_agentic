@@ -1,10 +1,12 @@
 # Genesys homework: Playwright + TypeScript
 
-Automated tests for the Genesys TypeScript homework (`requirements/homework.md`), written by a local multi-agent pipeline. The pipeline is the main deliverable; the tests are its output.
+Automated tests for the Genesys TypeScript homework (`agentic/requirements/homework.md`), written by a local multi-agent pipeline. The pipeline is the main deliverable; the tests are its output.
 
 ## How this was built
 
-The tests were written by a local multi-agent pipeline, not by hand, and reviewed by a human before submission. The full design and every lesson from 16+ runs are in [`PLAN.md`](PLAN.md); the pipeline code is in [`pipeline/`](pipeline/).
+The tests were written by a local multi-agent pipeline, not by hand, and reviewed by a human before submission. The full design and every lesson from 16+ runs are in [`agentic/PLAN.md`](agentic/PLAN.md); the pipeline code is in [`agentic/pipeline/`](agentic/pipeline/).
+
+**Repo layout:** everything about the agentic workflow is in [`agentic/`](agentic/): the pipeline code and prompts (`pipeline/`), the original requirement (`requirements/homework.md`), the coding rules the agents follow (`CONVENTIONS.md`), the Analyst's specs per case (`specs/`), the design and run log (`PLAN.md`) and, locally, run logs (`runs/`, git-ignored). The root is the resulting Playwright project: `tests/`, `pages/`, `utils/`, `test/resources/`, `playwright.config.ts`, the CI workflow, and `docs/evidence/` for requirement deviations.
 
 - **Per case:** an **Analyst** (Claude Opus, with a browser) explores the live site and turns the original requirement into a spec, including documented deviations where a step can't be fulfilled as written. A **Coder** (Claude Sonnet) implements it. A deterministic **gate** runs `tsc`, the tests 3× (flaky = failed), the full suite, and checks (exact Playwright pin, no hard-coded hosts, spec ↔ README deviations). A **Reviewer** (Codex, a different model) and the Coder loop until it ships. A fresh **Acceptance** check compares the code with the *original* text, not the spec.
 - **The orchestrator is plain TypeScript, not an agent:** everything that decides pass/fail is deterministic.
@@ -15,26 +17,26 @@ The tests were written by a local multi-agent pipeline, not by hand, and reviewe
 
 The pipeline is still tied to this homework's cases in a few places, so a new case (say Case 6) needs four edits before the run:
 
-1. **`requirements/homework.md`:** add the case in the same format: a `## Case 6 – <title>` heading (en dash) and bold step IDs (`- **6.1** …`). The parser in `pipeline/orchestrator.ts` only recognises this form.
-2. **`SLUGS` in `pipeline/orchestrator.ts`:** add a slug, e.g. `6: "login-api"`. It becomes part of the branch name.
+1. **`agentic/requirements/homework.md`:** add the case in the same format: a `## Case 6 – <title>` heading (en dash) and bold step IDs (`- **6.1** …`). The parser in `agentic/pipeline/orchestrator.ts` only recognises this form.
+2. **`SLUGS` in `agentic/pipeline/orchestrator.ts`:** add a slug, e.g. `6: "login-api"`. It becomes part of the branch name.
 3. **`README.md`:** add `### Case 6` with `_None._` under both `## Requirement deviations` and `## CI limitations`. Agents may write only to their own subsections.
-4. **API-only case:** add its number to the no-browser check (`id === 0 || id === 5`) in `pipeline/orchestrator.ts`. Every other case gets a browser for the Analyst.
+4. **API-only case:** add its number to the no-browser check (`id === 0 || id === 5`) in `agentic/pipeline/orchestrator.ts`. Every other case gets a browser for the Analyst.
 
 Then run (several cases at once: `--cases 5,6`):
 
 ```bash
-npm --prefix pipeline run orchestrate -- --cases 6
+npm --prefix agentic/pipeline run orchestrate -- --cases 6
 ```
 
-Models and rounds can be overridden with environment variables: `CODER_MODEL=opus REVIEWER=claude MAX_ROUNDS=2 npm --prefix pipeline run orchestrate -- --cases 6`.
+Models and rounds can be overridden with environment variables: `CODER_MODEL=opus REVIEWER=claude MAX_ROUNDS=2 npm --prefix agentic/pipeline run orchestrate -- --cases 6`.
 
-The report and logs go to `runs/<stamp>/`; the code goes to a separate worktree `../<repo>-run-<stamp>` on the branch `ai/<stamp>/integration`. Nothing is merged or pushed: review the branch and merge it yourself. Remove a run with:
+The report and logs go to `agentic/runs/<stamp>/`; the code goes to a separate worktree `../<repo>-run-<stamp>` on the branch `ai/<stamp>/integration`. Nothing is merged or pushed: review the branch and merge it yourself. Remove a run with:
 
 ```bash
-npm --prefix pipeline run cleanup -- <stamp>
+npm --prefix agentic/pipeline run cleanup -- <stamp>
 ```
 
-A different project (another site or document) also needs its own `CONVENTIONS.md`.
+A different project (another site or document) also needs its own `agentic/CONVENTIONS.md`.
 
 ## How to run
 

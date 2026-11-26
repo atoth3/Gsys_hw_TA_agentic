@@ -9,7 +9,7 @@ Binding for the Coder, checked by the Reviewer. "Must" rules are high-severity w
 - Must: one spec file per case: `tests/case-<N>-<slug>.spec.ts`. Case 0 has a single smoke test, so CI always has something to run: it opens a real page in the project's browser and asserts something visible on it, so a CI run proves the browser install works.
 - Setup and CI requirements (Node version, Playwright pin, the `npm test` script, the workflow) are verified by the pipeline's gate (pin check, `npm test` script check, `actionlint`) and by the CI run itself, **not** by Playwright tests. Don't write tests that parse `package.json`, the lockfile or workflow YAML: such a test re-implements a linter, and it can never catch every bad edit.
 - Page objects in `pages/` (one class per page or component), shared helpers in `utils/`, test data in `test/resources/`.
-- `tsconfig.json` must `include` only the test project (`tests/`, `pages/`, `utils/`, `playwright.config.ts`, …). It must not include `pipeline/`, which is a separate package with its own dependencies.
+- `tsconfig.json` must `include` only the test project (`tests/`, `pages/`, `utils/`, `playwright.config.ts`, …). It must not include `agentic/`, which is a separate package with its own dependencies.
 - `playwright.config.ts`: `testDir: 'tests'`; reporter settings per the CI checklist below.
 
 ## Proportionality (read this first)

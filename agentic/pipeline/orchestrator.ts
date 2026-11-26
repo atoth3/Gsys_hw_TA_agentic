@@ -1,8 +1,8 @@
 // Orchestrator: deterministic code that runs Analyst → Coder → Gate → Reviewer ⇄ Coder → Acceptance per case
 // (PLAN.md sections 1–7). Everything that decides pass / fail / continue / stop is in here, not in an LLM.
 //
-//   npm --prefix pipeline run orchestrate -- --cases 0,5          # local mode (the only mode so far)
-//   CODER_MODEL=opus REVIEWER=claude MAX_ROUNDS=2 npm --prefix pipeline run orchestrate -- --cases 0,5
+//   npm --prefix agentic/pipeline run orchestrate -- --cases 0,5          # local mode (the only mode so far)
+//   CODER_MODEL=opus REVIEWER=claude MAX_ROUNDS=2 npm --prefix agentic/pipeline run orchestrate -- --cases 0,5
 //
 // Local mode: a fresh worktree ../<repo>-run-<stamp>, one branch per case, accepted cases squash-merged into
 // ai/<stamp>/integration, the next case branches from there. Nothing leaves this machine.
@@ -36,12 +36,13 @@ const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MIN ?? 15) * 60_000; // one 
 const TURNS = { analyst: 50, analystBrowser: 150, coder: 120, acceptance: 40, reviewer: 40 }; // dry run 1: Case 0 coder used 79 of 80; run 4: browser Analyst hit 50
 
 const PIPE = import.meta.dirname;
-const CHECKOUT = resolve(PIPE, "..");
+const CHECKOUT = resolve(PIPE, "../..");
+const AGENTIC = "agentic"; // the workflow's files, relative to the repo root; the test project is at the root
 const MAIN_REPO = dirname(sh("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], CHECKOUT).trim());
 const MANUAL_DIR = join(dirname(MAIN_REPO), "Gsys_hw_TA"); // the manual solution: agents must never read it
 const BASE = sh("git", ["rev-parse", opt("base") ?? "HEAD"], CHECKOUT).trim();
 const STAMP = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-const OUT = join(CHECKOUT, "runs", STAMP);
+const OUT = join(CHECKOUT, AGENTIC, "runs", STAMP);
 const WT = join(dirname(MAIN_REPO), `${basename(MAIN_REPO)}-run-${STAMP}`);
 const INTEGRATION = `ai/${STAMP}/integration`;
 mkdirSync(OUT, { recursive: true });
@@ -99,8 +100,8 @@ function parseHomework(md: string): Map<number, CaseDef> {
   }
   return cases;
 }
-const HOMEWORK = parseHomework(readFileSync(join(CHECKOUT, "requirements/homework.md"), "utf8"));
-const CONVENTIONS = readFileSync(join(CHECKOUT, "CONVENTIONS.md"), "utf8");
+const HOMEWORK = parseHomework(readFileSync(join(CHECKOUT, AGENTIC, "requirements/homework.md"), "utf8"));
+const CONVENTIONS = readFileSync(join(CHECKOUT, AGENTIC, "CONVENTIONS.md"), "utf8");
 
 // ── Run state, manifest, report ──────────────────────────────────────────────
 type Issue = { file: string; kind: "test" | "spec-gap" | "site-issue"; severity: "high" | "medium" | "low"; problem: string; fix: string };
@@ -123,7 +124,7 @@ type CaseState = {
 const startedAt = Date.now();
 const cases: CaseState[] = CASE_IDS.map((id) => {
   const def = HOMEWORK.get(id);
-  if (!def) throw new Error(`Case ${id} not found in requirements/homework.md`);
+  if (!def) throw new Error(`Case ${id} not found in agentic/requirements/homework.md`);
   return {
     def, branch: `ai/${STAMP}/case-${id}-${def.slug}`, status: "pending", analyst: "—", coder: "—", gate: "—",
     review: "—", acceptance: "—", rounds: 0, deviations: [], openHigh: [], specGaps: [], siteIssues: [], flaky: [],
@@ -156,7 +157,7 @@ function writeReport(outcome: string) {
   const bullet = (i: Issue) => `- [${i.severity}] ${i.file}: ${i.problem}`;
   const yourCall = (c: CaseState) => c.status !== "needs-human" ? "" : `
 **✋ Your call.** The gate is green; the reviewer still has the open issues below. Read them, then either:
-- give it more rounds: \`MAX_ROUNDS=${MAX_ROUNDS + 1} npm --prefix pipeline run orchestrate -- --cases ${CASE_IDS.join(",")}\` (a fresh run), or
+- give it more rounds: \`MAX_ROUNDS=${MAX_ROUNDS + 1} npm --prefix agentic/pipeline run orchestrate -- --cases ${CASE_IDS.join(",")}\` (a fresh run), or
 - accept it as is: \`git -C ${WT} switch ${INTEGRATION} && git -C ${WT} merge --squash ${c.branch} && git -C ${WT} commit -m "Case ${c.def.id}: ${c.def.title} (accepted by hand)"\`. Acceptance did not run, so check the case against the original requirement yourself.
 `;
   const details = cases.map((c) => `### Case ${c.def.id}: ${c.def.title}
@@ -200,7 +201,7 @@ function acceptanceTable(a: Acceptance): string {
 
 // ── Paths and README ownership ───────────────────────────────────────────────
 // Entries ending in "/" are prefixes, others exact paths.
-function analystPaths(id: number) { return [`specs/case-${id}.json`, `specs/case-${id}.md`, `docs/evidence/case-${id}/`]; }
+function analystPaths(id: number) { return [`agentic/specs/case-${id}.json`, `agentic/specs/case-${id}.md`, `docs/evidence/case-${id}/`]; }
 function coderPaths(id: number) {
   // playwright.config.ts for every case: proportionality wants baseURL/timeouts in the config, not in tests.
   const base = ["tests/", "pages/", "utils/", "test/resources/", `docs/evidence/case-${id}/`, "package.json", "package-lock.json", "playwright.config.ts"];
@@ -246,14 +247,14 @@ function pathGuard(from: string, allowed: string[], readmeKeys: string[]): strin
 
 // ── Contract checks ──────────────────────────────────────────────────────────
 function readSpec(id: number): { spec?: any; errors: string[] } {
-  const file = join(WT, `specs/case-${id}.json`);
-  if (!existsSync(file)) return { errors: [`specs/case-${id}.json is missing`] };
+  const file = join(WT, `agentic/specs/case-${id}.json`);
+  if (!existsSync(file)) return { errors: [`agentic/specs/case-${id}.json is missing`] };
   let spec: any;
-  try { spec = loadJson(file); } catch (e) { return { errors: [`specs/case-${id}.json is not valid JSON: ${(e as Error).message}`] }; }
+  try { spec = loadJson(file); } catch (e) { return { errors: [`agentic/specs/case-${id}.json is not valid JSON: ${(e as Error).message}`] }; }
   const errors: string[] = [];
   if (!validate.spec(spec)) errors.push(`schema: ${ajvErrors(validate.spec)}`);
   if (spec.case !== id) errors.push(`"case" is ${spec.case}, expected ${id}`);
-  if (!existsSync(join(WT, `specs/case-${id}.md`))) errors.push(`specs/case-${id}.md is missing`);
+  if (!existsSync(join(WT, `agentic/specs/case-${id}.md`))) errors.push(`agentic/specs/case-${id}.md is missing`);
   const covered = new Set((spec.steps ?? []).map((s: any) => String(s.id).replace(/[a-z]$/, "")));
   for (const step of HOMEWORK.get(id)!.stepIds) if (!covered.has(step)) errors.push(`original step ${step} has no refined step`);
   return { spec, errors };
@@ -415,8 +416,8 @@ const gateLabel = (g: GateResult) =>
 const DENY = [
   `Read(/${MANUAL_DIR}/**)`, `Edit(/${MANUAL_DIR}/**)`, // the manual solution (contamination guard, layer 1)
   `Read(/${MAIN_REPO}/**)`, `Edit(/${MAIN_REPO}/**)`,   // your checkout: earlier runs' logs, PLAN.md
-  `Read(/${WT}/PLAN.md)`, `Read(/${WT}/pipeline/**)`,     // the pipeline's own files inside the worktree (traps table!)
-  `Read(/${WT}/CONVENTIONS.md)`, // the worktree's copy comes from the base commit and may be stale; the prompt carries the current one (run 12)
+  `Read(/${WT}/agentic/PLAN.md)`, `Read(/${WT}/agentic/pipeline/**)`,     // the pipeline's own files inside the worktree (traps table!)
+  `Read(/${WT}/agentic/CONVENTIONS.md)`, // the worktree's copy comes from the base commit and may be stale; the prompt carries the current one (run 12)
   "Bash(*Gsys_hw_TA/*)", "Bash(*file://*)",
 ];
 const READ_ONLY_DENY = [...DENY, "Edit", "Write", "NotebookEdit"];
@@ -474,7 +475,7 @@ function analystArgs(c: CaseState): string[] {
 }
 
 function earlierSpecs(id: number): string {
-  const dir = join(WT, "specs");
+  const dir = join(WT, AGENTIC, "specs");
   if (!existsSync(dir)) return "(none yet)";
   const files = readdirSync(dir).filter((f) => /^case-\d+\.json$/.test(f) && f !== `case-${id}.json`);
   if (!files.length) return "(none yet)";
@@ -484,7 +485,7 @@ function earlierSpecs(id: number): string {
   }).join("\n");
 }
 
-const projectFiles = () => sh("git", ["ls-files"], WT).split("\n").filter((f) => f && !f.startsWith("pipeline/") && f !== "PLAN.md").join("\n");
+const projectFiles = () => sh("git", ["ls-files"], WT).split("\n").filter((f) => f && !f.startsWith("agentic/pipeline/") && f !== "agentic/PLAN.md").join("\n");
 const caseDir = (id: number) => join(OUT, `case-${id}`);
 const head = () => sh("git", ["rev-parse", "HEAD"], WT).trim();
 const diffFor = (from: string) => {
@@ -670,14 +671,14 @@ function runAcceptance(c: CaseState, attempt: number, caseBase: string, g: GateR
   const id = c.def.id;
   const sections = readmeSections(readFileSync(join(WT, "README.md"), "utf8"));
   const changed = sh("git", ["diff", "--name-only", caseBase, "HEAD"], WT).split("\n")
-    .filter((f) => f && !f.startsWith("specs/") && f !== "package-lock.json").join("\n");
+    .filter((f) => f && !f.startsWith("agentic/specs/") && f !== "package-lock.json").join("\n");
   const p = render(prompt("acceptance"), {
     CASE_ID: String(id), CASE_TITLE: c.def.title, CASE_TEXT: c.def.text, STEP_IDS: c.def.stepIds.join(", "),
     CHANGED_FILES: changed,
     README_SECTIONS: ["Requirement deviations", "CI limitations"].map((h) => `\n${sections.get(readmeKey(h, id)) ?? `(no "${h}" section for Case ${id})`}`).join("\n"),
     SPEC_GAPS: c.specGaps.map((i) => `- ${i.file}: ${i.problem}`).join("\n") || "none",
     GATE: g.text.slice(0, 6000),
-    TOOLS_NOTE: "Tools: read files (Read, Glob, Grep) and `curl` for one read-only re-check of a deviation's evidence. You cannot edit anything. Do not read specs/: judge against the original text.",
+    TOOLS_NOTE: "Tools: read files (Read, Glob, Grep) and `curl` for one read-only re-check of a deviation's evidence. You cannot edit anything. Do not read agentic/specs/: judge against the original text.",
   }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions.`;
   const r = track(c, claudeResumable({ step: `Case ${id} › Acceptance ${attempt}`, prompt: p, cwd: WT, logBase: join(caseDir(id), `acceptance-${attempt}`),
     args: ROLE_ARGS.acceptance, model: MODELS.acceptance, maxTurns: TURNS.acceptance, timeoutMs: TIMEOUT_MS, jsonSchema: acceptanceJsonSchema }));
@@ -827,7 +828,7 @@ function diffChanges(before: GateResult, after: GateResult): string {
 
 // ══ Main ═════════════════════════════════════════════════════════════════════
 installInterruptHandler();
-const cleanupCmd = `npm --prefix pipeline run cleanup -- ${STAMP}`;
+const cleanupCmd = `npm --prefix agentic/pipeline run cleanup -- ${STAMP}`;
 function finish(outcome: string, code: number): never {
   manifest.finished = true;
   manifest.outcome = outcome;

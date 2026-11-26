@@ -64,8 +64,8 @@ No `added` criteria: every check in this case is demanded by the original wordin
 - The year is computed, not written: the site's single script bundle renders the line as
   `["© ", new Date().getFullYear(), " Sauce Labs. All Rights Reserved. Terms of Service | Privacy Policy"]`,
   and the literal `2023` occurs **zero** times in that bundle
-  (evidence: [`docs/evidence/case-2/footer-year.md`](../docs/evidence/case-2/footer-year.md),
-  [`docs/evidence/case-2/footer-year.png`](../docs/evidence/case-2/footer-year.png)).
+  (evidence: [`docs/evidence/case-2/footer-year.md`](../../docs/evidence/case-2/footer-year.md),
+  [`docs/evidence/case-2/footer-year.png`](../../docs/evidence/case-2/footer-year.png)).
 - No cookie/consent banner, no iframe and no third-party overlay appeared anywhere in the flow. The
   only console output is one harmless error per page load
   (`Permissions policy violation: unload is not allowed in this document`).
@@ -114,5 +114,5 @@ No `added` criteria: every check in this case is demanded by the original wordin
   rather than to today's hard-coded 2026, which would rot the same way. The "Terms of Service" half
   stays exactly as written, and the check keeps its original strength — the footer must still carry
   the copyright year, taken from the same source the site uses.
-- **Evidence:** [`docs/evidence/case-2/footer-year.md`](../docs/evidence/case-2/footer-year.md),
-  [`docs/evidence/case-2/footer-year.png`](../docs/evidence/case-2/footer-year.png)
+- **Evidence:** [`docs/evidence/case-2/footer-year.md`](../../docs/evidence/case-2/footer-year.md),
+  [`docs/evidence/case-2/footer-year.png`](../../docs/evidence/case-2/footer-year.png)

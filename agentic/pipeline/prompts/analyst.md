@@ -55,13 +55,13 @@ The pipeline checks that spec and README match one-to-one and that every evidenc
 # Output (files)
 
 You may create or change ONLY:
-- `specs/case-{{CASE_ID}}.json`: must validate against the JSON schema below, with `"case": {{CASE_ID}}` and `"status": "DONE"` (or `"BLOCKED"` plus `blocked_reason`).
-- `specs/case-{{CASE_ID}}.md`: the same spec for humans (summary, steps table original → refined, observations, decisions, deviations).
+- `agentic/specs/case-{{CASE_ID}}.json`: must validate against the JSON schema below, with `"case": {{CASE_ID}}` and `"status": "DONE"` (or `"BLOCKED"` plus `blocked_reason`).
+- `agentic/specs/case-{{CASE_ID}}.md`: the same spec for humans (summary, steps table original → refined, observations, decisions, deviations).
 - `docs/evidence/case-{{CASE_ID}}/…`: evidence files, only if you need them.
 - Your own README subsection `### Case {{CASE_ID}}` under `## Requirement deviations`, and nothing else in README.md.
 Any other change makes the pipeline reject your work.
 
-JSON schema for `specs/case-{{CASE_ID}}.json`:
+JSON schema for `agentic/specs/case-{{CASE_ID}}.json`:
 ```json
 {{SPEC_SCHEMA}}
 ```
