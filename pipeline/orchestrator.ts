@@ -111,7 +111,7 @@ type Acceptance = {
   deviation_checks: { id: string; unfulfillable_as_written: boolean; smallest_change: boolean; implemented_not_weaker: boolean; note: string }[];
 };
 type CaseState = {
-  def: CaseDef; branch: string; status: "pending" | "running" | "merged" | "failed" | "interrupted";
+  def: CaseDef; branch: string; status: "pending" | "running" | "merged" | "failed" | "needs-human" | "interrupted";
   analyst: string; coder: string; gate: string; review: string; acceptance: string;
   rounds: number; deviations: string[]; failReason?: string; commit?: string;
   specSummary?: string; lastReview?: Review; openHigh: Issue[]; specGaps: Issue[]; siteIssues: Issue[];
@@ -152,8 +152,14 @@ function writeReport(outcome: string) {
     deviations: c.deviations.join(", ") || "—",
   }));
   const bullet = (i: Issue) => `- [${i.severity}] ${i.file}: ${i.problem}`;
+  const yourCall = (c: CaseState) => c.status !== "needs-human" ? "" : `
+**✋ Your call.** The gate is green; the reviewer still has the open issues below. Read them, then either:
+- give it more rounds: \`MAX_ROUNDS=${MAX_ROUNDS + 1} npm --prefix pipeline run orchestrate -- --cases ${CASE_IDS.join(",")}\` (a fresh run), or
+- accept it as is: \`git -C ${WT} switch ${INTEGRATION} && git -C ${WT} merge --squash ${c.branch} && git -C ${WT} commit -m "Case ${c.def.id}: ${c.def.title} (accepted by hand)"\`. Acceptance did not run, so check the case against the original requirement yourself.
+`;
   const details = cases.map((c) => `### Case ${c.def.id}: ${c.def.title}
 - Status: **${c.status}**${c.failReason ? `: ${c.failReason}` : ""}
+${yourCall(c)}
 - Branch: \`${c.branch}\`${c.commit ? `, merged as \`${c.commit.slice(0, 9)}\`` : ""}
 - Spec: ${c.specSummary ?? "—"}
 - Review rounds: ${c.rounds}; last verdict: ${c.lastReview ? `${c.lastReview.ship ? "ship" : "don't ship"} (${c.lastReview.reason})` : "—"}
@@ -430,6 +436,8 @@ const diffFor = (from: string) => {
 // ── Case flow ────────────────────────────────────────────────────────────────
 class CaseFailed extends Error {}
 const failCase = (c: CaseState, reason: string): never => { c.failReason = reason; throw new CaseFailed(reason); };
+class NeedsHuman extends CaseFailed {}
+const needsHuman = (c: CaseState, reason: string): never => { c.failReason = reason; throw new NeedsHuman(reason); };
 
 function runAnalyst(c: CaseState): any {
   const id = c.def.id;
@@ -479,12 +487,21 @@ This is Case 0: you create the project skeleton every later case builds on: \`pa
   }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
 }
 
-function review(c: CaseState, round: number, spec: any, caseBase: string, coderSummary: string, g: GateResult, changes: string, label: string): Review {
+/** Re-review scope (dry run 2: each round found NEW highs, so the loop never converged). */
+function reReviewNote(prev: Issue[]): string {
+  return `This is a RE-REVIEW after fixes. Scope it tightly:
+1. First check that each previously blocking issue below is really fixed. One that is not fixed stays HIGH.
+2. A NEW high issue counts only if (a) the fixes themselves introduced it, or (b) you can show that a step of the refined spec or the original requirement is not met by the current code.
+3. Anything else you notice now that you could have reported in an earlier round: report it as medium (a follow-up), not high.
+Do not repeat resolved issues.${prev.length ? `\n\nPreviously blocking issues:\n${prev.map((i) => `- ${i.file}: ${i.problem}`).join("\n")}` : ""}`;
+}
+
+function review(c: CaseState, round: number, spec: any, caseBase: string, coderSummary: string, g: GateResult, changes: string, label: string, prev: Issue[] = []): Review {
   const id = c.def.id;
   const p = render(prompt("reviewer"), {
     CASE_ID: String(id), CASE_TITLE: c.def.title, CASE_TEXT: c.def.text, SPEC_JSON: JSON.stringify(spec, null, 2),
     CONVENTIONS, CODER_SUMMARY: coderSummary, GATE: g.text, DIFF: diffFor(caseBase),
-    ROUND_NOTE: round > 1 ? "This is a RE-REVIEW after fixes: check the fixes themselves, do not repeat resolved issues." : "",
+    ROUND_NOTE: round > 1 ? reReviewNote(prev) : "",
     CHANGES: changes ? `\n# Changes since the previous test run (judge each one)\n${changes}\n- A test that flipped pass → fail is fine only if it was tightened and now correctly shows a site issue; otherwise it is a HIGH test issue.\n- A removed test is a HIGH test issue unless it was a duplicate or genuinely wrong.\n` : "",
   }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions. Your whole reply is the JSON object.`;
   const logBase = join(caseDir(id), `review-${label}`);
@@ -633,7 +650,7 @@ function runCase(c: CaseState) {
       changes = diffChanges(before, g);
       continue;
     }
-    rv = review(c, round, spec, caseBase, summary, g, changes, `r${round}`);
+    rv = review(c, round, spec, caseBase, summary, g, changes, `r${round}`, blocking);
     blocking = blockingIssues(rv, g);
     if (rv.ship && blocking.length === 0) break;
     if (blocking.length === 0) { c.notes.push(`Round ${round}: ship=false without a high test issue: nothing concrete to fix`); break; }
@@ -650,9 +667,12 @@ function runCase(c: CaseState) {
   // ③ step 8: final gate on the full suite
   g = gate(c, "final (full suite)", analystDone, true);
   c.gate = gateLabel(g);
-  if (!rv || !rv.ship || blocking.length || !g.green) {
-    failCase(c, !g.green ? `final gate RED${c.siteIssues.length ? " (site issue reported)" : ""}` : "reviewer did not approve");
-  }
+  if (!g.green) failCase(c, `final gate RED${c.siteIssues.length ? " (site issue reported)" : ""}`);
+  if (!rv) return failCase(c, "never reviewed (gate errors every round)");
+  // Gate green but the reviewer still says no after the budget (or contradicts itself): the user decides, not the loop.
+  if (!rv.ship || blocking.length) needsHuman(c, blocking.length
+    ? `review budget (${MAX_ROUNDS} rounds) used up with ${blocking.length} high issue(s) open; gate is green`
+    : "reviewer said ship=false without a concrete high issue; gate is green");
 
   // ⑤ Acceptance (fresh session, sees the ORIGINAL text)
   let acc = runAcceptance(c, 1, caseBase, g);
@@ -728,15 +748,17 @@ try {
     } catch (e) {
       if (e instanceof Interrupted) throw e;
       if (!(e instanceof CaseFailed) && !(e instanceof AgentError)) throw e;
-      c.status = "failed";
+      c.status = e instanceof NeedsHuman ? "needs-human" : "failed";
       c.failReason ??= (e as Error).message;
-      console.error(`❌ Case ${c.def.id} failed: ${c.failReason}`);
+      console.error(`${c.status === "needs-human" ? "✋" : "❌"} Case ${c.def.id} ${c.status}: ${c.failReason}`);
       shTry("git", ["switch", "-q", "-f", INTEGRATION], WT); // next case starts from integration without it
       writeManifest();
       writeReport("running");
       if (c.def.id === 0) {
-        for (const rest of cases.filter((x) => x.status === "pending")) rest.notes.push("not run: Case 0 failed");
-        finish("FAILED: Case 0 (skeleton) failed, nothing after it can work", 1);
+        for (const rest of cases.filter((x) => x.status === "pending")) rest.notes.push(`not run: Case 0 ${c.status}`);
+        finish(c.status === "needs-human"
+          ? "NEEDS HUMAN: Case 0 (skeleton) is waiting for your call (see report), nothing after it can run"
+          : "FAILED: Case 0 (skeleton) failed, nothing after it can work", 1);
       }
     }
   }
