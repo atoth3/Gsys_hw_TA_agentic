@@ -607,6 +607,9 @@ function review(c: CaseState, round: number, spec: any, caseBase: string, coderS
  * that enforcing every extra the Analyst invents multiplies the code). A gap goes back to the Coder without a review.
  */
 function traceCheck(id: number, spec: any, coderText: string): string[] {
+  // Case 0's criteria live in package.json / the workflow, and the gate already verifies them (pin, npm test script,
+  // tsc, actionlint): no assertion to trace (run 15 tripped on exactly that).
+  if (id === 0) return [];
   const acs: { id: string; source: string }[] = (spec.acceptance_criteria ?? [])
     .filter((a: any) => typeof a === "object" && a.source === "original");
   if (!acs.length) return [];
