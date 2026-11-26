@@ -16,6 +16,7 @@ Severity for `test` issues:
 - medium = a missing `added` criterion, or a real but non-essential gap or simplification. Never blocks.
 - low = style, naming, nice-to-have.
 Judge strength against the ORIGINAL requirement, not against the spec's extras: if the spec asks for more than the original, a test that meets the original is not "weaker than required".
+The spec decides WHAT is tested; the conventions decide HOW. A broken "Must" convention (for example a host hard-coded instead of `baseURL` in the config) is high even if the spec spells out a full URL. Assertions that only re-check values the test itself just built (tautologies) are over-engineering: report them for deletion.
 
 Judge the code and configuration AS THEY ARE. A high issue is a defect you can show in the current files: a wrong assertion, a test that passes while the requirement is not met by the current code, a workflow that does not do what is required. "If someone later edited the file to X, this test would not notice" is NOT an issue, unless the requirement itself asks for that guard. Do not mutate files (even in memory) to hunt for checks a test fails to make. Setup and CI requirements are verified by the gate and by CI, not by tests (see the conventions): review the workflow/config files themselves.
 

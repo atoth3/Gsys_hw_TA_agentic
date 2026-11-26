@@ -28,6 +28,8 @@ Specs of earlier cases (keep terminology and test-data choices consistent with t
    - `original`: the step's wording requires it. This is the normal case; usually ONE criterion per step, sometimes two.
    - `added`: anything beyond the wording. Use it rarely, only when the test cannot be reliable without it, and say why in the text. Never add negative checks ("nothing else is bold"), intermediate pages, element types or extra counts just to be thorough.
    The Coder must implement every `original` criterion, and the Reviewer blocks on them, so keep them minimal and exact.
+   A criterion like "the test asserts X" is `original` only if the step itself says verify / validate / check. A step that says "log", "add", "go through" or "parse" is satisfied by doing it (and by later steps that use the result), not by extra assertions.
+   Describe WHAT must hold, never HOW to code it: no hosts or URLs to hard-code, no assertion style, no helper structure. That belongs to the Coder and CONVENTIONS.md.
 5. Put concrete test data you chose in `test_data`.
 
 # Requirement deviations (only if a step is UNFULFILLABLE as written)

@@ -698,6 +698,12 @@ The plan was written before any code ran. These are the things the dry runs prov
 - Also fixed: a Ctrl+C was recorded as "Case 4 failed" instead of `interrupted` (the CLI exits cleanly on SIGINT, and Node runs the handler only after the blocking call returns).
 - **Consequence:** the earlier results (Cases 0, 1, 2, 5 on `ai/2026-11-26T09-00-38/integration`) were written under the old rules. They stay as a reference, but the final run must regenerate all cases under the new rules.
 
+### Run 11 (`2026-11-26T10-36-12`, Case 5 alone, first run under the proportionality rules): ACCEPTED, half the size
+- 7.5 min, 46 turns. Rounds: `r1 trace: 2 gap(s) → r2 review: ship`. The first Codex review already said ship.
+- Size: **35 lines / 8 `expect`s** (old rules: 67 / 15; manual: 17 lines).
+- **Still wrong:** (1) the URL is still hard-coded: the Reviewer flagged it only as medium because the Analyst's spec spelled out the full URL, and medium never triggers a fix; (2) four tautological assertions in 5.4 re-check strings the test just built, from an Analyst criterion ("the test asserts the format") tagged `original` although the PDF only says "log"; (3) the traceability "gaps" were a false alarm: the Coder listed several assertions in one cell (`a / b`), which the parser didn't accept.
+- **Fixes:** Reviewer: a broken *Must* convention is high even if the spec says otherwise (spec = what, conventions = how), and tautological assertions are over-engineering. Analyst: "the test asserts X" is `original` only if the step says verify/validate/check; describe what must hold, never how to code it (no hosts, no assertion style). Parser: several assertions per cell, separated by ` / `.
+
 ### Still open
-- Rerun Case 3 (and then Case 4) under the proportionality rules; compare line count and rounds with run 10.
+- Rerun Case 5 once more to confirm the last fixes (cheap), then Case 3 (rounds and size against run 10's 412 lines / 4 rounds).
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.

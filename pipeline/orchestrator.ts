@@ -603,7 +603,12 @@ function traceCheck(id: number, spec: any, coderText: string): string[] {
   for (const ac of acs) {
     const assertion = rows.get(ac.id);
     if (assertion === undefined) errors.push(`traceability: no row for ${ac.id} in your final traceability table`);
-    else if (!assertion || !code.includes(norm(assertion))) errors.push(`traceability: the assertion given for ${ac.id} (\`${assertion}\`) does not occur in the code`);
+    else {
+      // Several assertions may share one cell, separated by " / " (run 11: a valid table was rejected for that).
+      const parts = assertion.split(/`?\s+\/\s+`?/).map((p) => p.replace(/^`+|`+$/g, "").trim()).filter(Boolean);
+      const missing = parts.filter((p) => !code.includes(norm(p)));
+      if (!parts.length || missing.length) errors.push(`traceability: the assertion given for ${ac.id} (\`${missing[0] ?? assertion}\`) does not occur in the code`);
+    }
   }
   return errors;
 }
