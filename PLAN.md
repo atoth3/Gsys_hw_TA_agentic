@@ -676,6 +676,28 @@ The plan was written before any code ran. These are the things the dry runs prov
 ### Before build step 6: Analyst origin limit dropped
 - `--allowed-origins` is gone from `analyst-mcp.json`. It isn't a security boundary (MCP docs), and for Cases 3–4 it would distort what the Analyst sees: guru99's ad/consent iframes would be blocked, and a CDN-loaded editor might not load at all. The tests will meet those, so the Analyst must too. The `file://` guard (MCP default), the deny rules and the audit stay; the prompt asks the Analyst to stay on the case site.
 
+### Making the Coder more efficient (decided with Adam during run 10)
+**Observation:** in every browser case the first review found 3–6 high issues (Case 1: 6 and 4 in two runs, Case 2: 3, Case 3: 5) while the gate was green. They were almost never bad code but **missing or weaker checks**: the spec asked for something and the Coder skipped it. Case 3 then needed 4 rounds and still ended `needs-human`. So the leak is in the Analyst → Coder handoff. Four changes:
+1. **Numbered, atomic acceptance criteria.** `acceptance_criteria` in the spec schema is now a list of `{id: "AC-3.3a", step: "3.3", text, source}`. `source` is **`original`** (the PDF's wording requires it) or **`added`** (the Analyst's extra strictness: negative checks, intermediate states, robustness).
+2. **Coder traceability table, checked by code.** Every Coder reply ends with `| AC-ID | test.step title | assertion |`. Before calling the Reviewer, the orchestrator checks that every AC ID has a row and that the named `test.step` really occurs in the case's test file. A gap is a fix round *without* a review, like a gate hard error. Cheaper and more reliable than asking the Coder to review itself.
+3. **Reviewer severity follows the source.** A missing or weakened `original` criterion is high; an `added` one is medium (a follow-up, never blocking). Acceptance still judges against the PDF, so nothing required is lost. This targets the run 5 pattern, where the Analyst's own extras kept Case 1 from shipping.
+4. **Metrics.** `report.md` shows each case's rounds step by step ("r1 trace: 2 gap(s) → r2 review: 3 high → r3 review: ship"), so the effect can be measured instead of guessed. **Test:** rerun Case 3 alone and compare with run 10 (5 → 4 → 2 → 1 high in 4 rounds, `needs-human`).
+
+### Run 10 (`2026-11-26T09-28-26`, Cases 3–4): stopped by hand, and the biggest lesson so far
+- **Case 3:** `needs-human` after 4 rounds (5 → 4 → 2 → 1 high), gate green throughout.
+- **Case 4:** the Analyst found **two real deviations** not in section 5: the new tab's title is now "Selenium Live Project for Practice" (D-4.3), and "Join Now" no longer exists on the Selenium page (D-4.6). The first time-slice resume happened here (slow exploration, 79 tool calls, not a stall); it resumed cleanly. Then the gate went red: with Playwright 1.39's Firefox/WebKit, `page.goto` on guru99 never fires `load` (two CDN background images never finish loading); `domcontentloaded` arrives in 2 s. It's fixable in the test, but the run was stopped (see below).
+- **Adam compared the output with his manual solution: far too big.** Measured by line counts only (the manual code was not read, to keep the comparison clean): Case 5: 17 vs 67 lines; Case 3: 27 vs 412; Case 4: 31 vs 285; Cases 1–2: about 290 vs 560; overall 480 vs about 1,470 plus an 80-line CI summary script. Case 1 alone had 42 `expect`s. Also every step wrapped in `test.step`, and hosts hard-coded instead of `baseURL`.
+- **Root causes, all in the pipeline's design:** (1) the Analyst inflated the spec with negative checks and intermediate states; (2) the Reviewer treated every spec line as "required", so each round *added* assertions, with nothing ever asking "is this necessary?"; (3) our own CONVENTIONS demanded `test.step` for every step; (4) nothing asked for simplicity or idiomatic config, and the oracle rule ("never weaken") only pushes one way; (5) the planned traceability check would have *enforced* the extras.
+
+### Proportionality (Adam's decision, replaces items 2–3 of the efficiency plan above)
+- **New `PROPORTIONALITY` prompt block** (Analyst, Coder, Reviewer): the smallest solution that fully meets the original requirement; extra assertions, helpers and abstractions are a cost, not a bonus; don't invent requirements; over-engineering is a defect.
+- **CONVENTIONS.md:** a Proportionality section (assert what's asked, once; no speculative robustness; `baseURL` and timeouts in `playwright.config.ts`; thin page objects); `test.step` is now optional; the CI job summary stays a few lines inline instead of a script.
+- **Analyst:** usually one `original` criterion per step; `added` is rare and must say why.
+- **Traceability check:** enforces `original` criteria only. The Coder copies the exact assertion line into the table, and the orchestrator checks that it occurs in the code (no `test.step` needed).
+- **Reviewer:** reviews "too little" *and* "too much" with equal weight. Strength is judged against the ORIGINAL wording, not the spec's extras; a missing `added` criterion is medium; clear over-engineering is high.
+- Also fixed: a Ctrl+C was recorded as "Case 4 failed" instead of `interrupted` (the CLI exits cleanly on SIGINT, and Node runs the handler only after the blocking call returns).
+- **Consequence:** the earlier results (Cases 0, 1, 2, 5 on `ai/2026-11-26T09-00-38/integration`) were written under the old rules. They stay as a reference, but the final run must regenerate all cases under the new rules.
+
 ### Still open
-- Build step 6: Cases 3–4 (onlinehtmleditor.dev, guru99).
+- Rerun Case 3 (and then Case 4) under the proportionality rules; compare line count and rounds with run 10.
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.

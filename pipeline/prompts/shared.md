@@ -26,6 +26,14 @@ The only exception is a written requirement deviation (README "Requirement devia
 - Inside it, do not read `PLAN.md` or anything under `pipeline/`: they belong to the pipeline that runs you, not to the project.
 - `requirements/homework.md` is the original requirement text. It is read-only.
 
+<!-- block:PROPORTIONALITY -->
+## Proportionality
+
+The goal is the SMALLEST solution that fully meets the original requirement: what a careful senior engineer would hand in as homework, readable in minutes.
+- Every requirement step must be met at its stated strength. Nothing beyond that is required, and "beyond" is not free: each extra assertion, helper, abstraction or check is code someone has to read and maintain.
+- Do not invent requirements: no negative checks, intermediate states, element types, headers or counts the original text doesn't ask for.
+- Over-engineering is a defect, just like a missing check.
+
 <!-- block:ENVIRONMENT -->
 ## Environment facts (measured by the pipeline on the machine that runs the local gate)
 

@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
-  AgentError, type AgentResult, type CaseRow, type TestRun, Interrupted, checkStatus, claudeResumable, cleanEnvArgs, codex,
+  AgentError, type AgentResult, type CaseRow, type TestRun, Interrupted, checkStatus, wasInterrupted, claudeResumable, cleanEnvArgs, codex,
   commit, compareRuns, fmtDuration, installInterruptHandler, renderTable, runTests, sh, shTry, summarize,
 } from "./agents.ts";
 
@@ -117,6 +117,8 @@ type CaseState = {
   specSummary?: string; lastReview?: Review; openHigh: Issue[]; specGaps: Issue[]; siteIssues: Issue[];
   acceptanceJson?: Acceptance; flaky: string[]; denials: string[]; contamination: string[];
   seconds: number; turns: number; notes: string[];
+  // Efficiency metrics (plan item 4): one entry per loop round, so changes to the handoff can be measured.
+  roundLog: string[];   // e.g. "r1 trace: 2 AC missing", "r2 review: 3 high (original 2, added 1)", "r3 review: ship"
 };
 const startedAt = Date.now();
 const cases: CaseState[] = CASE_IDS.map((id) => {
@@ -125,7 +127,7 @@ const cases: CaseState[] = CASE_IDS.map((id) => {
   return {
     def, branch: `ai/${STAMP}/case-${id}-${def.slug}`, status: "pending", analyst: "—", coder: "—", gate: "—",
     review: "—", acceptance: "—", rounds: 0, deviations: [], openHigh: [], specGaps: [], siteIssues: [], flaky: [],
-    denials: [], contamination: [], seconds: 0, turns: 0, notes: [],
+    denials: [], contamination: [], seconds: 0, turns: 0, notes: [], roundLog: [],
   };
 });
 
@@ -163,6 +165,7 @@ ${yourCall(c)}
 - Branch: \`${c.branch}\`${c.commit ? `, merged as \`${c.commit.slice(0, 9)}\`` : ""}
 - Spec: ${c.specSummary ?? "—"}
 - Review rounds: ${c.rounds}; last verdict: ${c.lastReview ? `${c.lastReview.ship ? "ship" : "don't ship"} (${c.lastReview.reason})` : "—"}
+- Rounds, step by step: ${c.roundLog.join(" → ") || "—"}
 - Agent time: ${fmtDuration(c.seconds)}, turns: ${c.turns}
 ${c.acceptanceJson ? `\n**Acceptance: ${c.acceptanceJson.verdict}**: ${c.acceptanceJson.reason}\n\n${acceptanceTable(c.acceptanceJson)}\n` : ""}
 **Site issues:**\n${c.siteIssues.map(bullet).join("\n") || "none"}
@@ -473,7 +476,7 @@ function runAnalyst(c: CaseState): any {
     CASE_ID: String(id), CASE_TITLE: c.def.title, CASE_TEXT: c.def.text, STEP_IDS: c.def.stepIds.join(", "),
     TOOLS_NOTE: analystToolsNote(id), TODAY: new Date().toISOString().slice(0, 10), FILES: projectFiles(),
     EARLIER_SPECS: earlierSpecs(id), SPEC_SCHEMA: JSON.stringify(SCHEMA.spec, null, 2),
-  }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
+  }) + `\n\n${SHARED.PROPORTIONALITY}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
   const from = head();
   let r = track(c, claudeResumable({ step: `Case ${id} › Analyst`, prompt: base, cwd: WT, logBase: join(caseDir(id), "analyst"),
     args: analystArgs(c), model: MODELS.analyst, maxTurns: id === 0 || id === 5 ? TURNS.analyst : TURNS.analystBrowser, timeoutMs: TIMEOUT_MS }));
@@ -512,7 +515,7 @@ This is Case 0: you create the project skeleton every later case builds on: \`pa
   return render(prompt("coder"), {
     CASE_ID: String(id), CASE_TITLE: c.def.title, CASE_TEXT: c.def.text, SPEC_JSON: JSON.stringify(spec, null, 2),
     CONVENTIONS, ALLOWED_PATHS: allowed, CASE0_NOTE: case0, ALLOWED_COMMANDS: CODER_COMMANDS, TEST_FILTER: `tests/case-${id}-`,
-  }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
+  }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.PROPORTIONALITY}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
 }
 
 /** Re-review scope (dry run 2: each round found NEW highs, so the loop never converged). */
@@ -531,7 +534,7 @@ function review(c: CaseState, round: number, spec: any, caseBase: string, coderS
     CONVENTIONS, CODER_SUMMARY: coderSummary, GATE: g.text, DIFF: diffFor(caseBase),
     ROUND_NOTE: round > 1 ? reReviewNote(prev) : "",
     CHANGES: changes ? `\n# Changes since the previous test run (judge each one)\n${changes}\n- A test that flipped pass → fail is fine only if it was tightened and now correctly shows a site issue; otherwise it is a HIGH test issue.\n- A removed test is a HIGH test issue unless it was a duplicate or genuinely wrong.\n` : "",
-  }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions. Your whole reply is the JSON object.`;
+  }) + `\n\n${SHARED.PROPORTIONALITY}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions. Your whole reply is the JSON object.`;
   const logBase = join(caseDir(id), `review-${label}`);
   const viaClaude = (base: string) => claudeResumable({ step: `Case ${id} › Reviewer ${label}`, prompt: p, cwd: WT, logBase: base, args: ROLE_ARGS.reviewer,
     model: REVIEWER === "claude" ? MODELS.reviewer : CLAUDE_REVIEWER_MODEL, maxTurns: TURNS.reviewer, timeoutMs: TIMEOUT_MS, jsonSchema: claudeReviewSchema });
@@ -566,6 +569,42 @@ function review(c: CaseState, round: number, spec: any, caseBase: string, coderS
     `${rv.issues.filter((i) => i.kind === "test" && i.severity === "high").length} high test, ` +
     `${rv.issues.filter((i) => i.kind === "spec-gap").length} spec-gap, ${rv.issues.filter((i) => i.kind === "site-issue").length} site-issue`);
   return rv;
+}
+
+/**
+ * Plan item 2: the Coder ends every reply with a traceability table, one row per ORIGINAL acceptance criterion:
+ *   | AC-5.5 | `expect(users[0].email).toContain('@');` |
+ * Deterministic check: every `original` AC of the spec has a row, and the copied assertion really occurs in the
+ * case's code (its test file, pages/ or utils/). `added` criteria are not enforced (proportionality: run 10 showed
+ * that enforcing every extra the Analyst invents multiplies the code). A gap goes back to the Coder without a review.
+ */
+function traceCheck(id: number, spec: any, coderText: string): string[] {
+  const acs: { id: string; source: string }[] = (spec.acceptance_criteria ?? [])
+    .filter((a: any) => typeof a === "object" && a.source === "original");
+  if (!acs.length) return [];
+  const norm = (s: string) => s.replace(/\s+/g, "").replace(/;$/, "");
+  const rows = new Map<string, string>();
+  for (const line of coderText.split("\n")) {
+    const m = line.match(/^\s*\|\s*`?(AC-[\w.]+)`?\s*\|\s*(.+?)\s*\|\s*$/);
+    if (m) rows.set(m[1], m[2].trim().replace(/^`+|`+$/g, ""));
+  }
+  const files: string[] = [];
+  for (const dir of ["tests", "pages", "utils"]) {
+    const d = join(WT, dir);
+    if (!existsSync(d)) continue;
+    for (const f of readdirSync(d, { recursive: true }) as string[]) {
+      if (dir === "tests" && !f.startsWith(`case-${id}-`)) continue;
+      if (/\.(ts|js)$/.test(f)) files.push(readFileSync(join(d, f), "utf8"));
+    }
+  }
+  const code = norm(files.join("\n"));
+  const errors: string[] = [];
+  for (const ac of acs) {
+    const assertion = rows.get(ac.id);
+    if (assertion === undefined) errors.push(`traceability: no row for ${ac.id} in your final traceability table`);
+    else if (!assertion || !code.includes(norm(assertion))) errors.push(`traceability: the assertion given for ${ac.id} (\`${assertion}\`) does not occur in the code`);
+  }
+  return errors;
 }
 
 /** High test issues, plus failing tests the reviewer didn't explain as a site issue. */
@@ -662,17 +701,23 @@ function runCase(c: CaseState) {
 
   // ③④ Gate + Reviewer ⇄ Coder (resumed)
   let summary = coder.text;
+  let lastCoderText = coder.text; // the latest reply must carry the full traceability table
   let changes = "";
   let rv: Review | undefined;
   let blocking: Issue[] = [];
   for (let round = 1; round <= MAX_ROUNDS; round++) {
     c.rounds = round;
-    if (g.hard.length) {
-      // A gate with hard errors (tsc, path guard, pin, broken suite…) goes straight back to the coder: nothing to review yet.
-      blocking = g.hard.map((h) => ({ file: "(gate)", kind: "test" as const, severity: "high" as const, problem: h, fix: "" }));
+    const trace = traceCheck(id, spec, lastCoderText);
+    if (g.hard.length || trace.length) {
+      // Gate hard errors (tsc, path guard, pin, broken suite…) or traceability gaps go straight back to the coder:
+      // nothing worth a review yet.
+      const errs = [...g.hard, ...trace];
+      c.roundLog.push(`r${round} ${g.hard.length ? `gate: ${g.hard.length} hard` : ""}${g.hard.length && trace.length ? ", " : ""}${trace.length ? `trace: ${trace.length} gap(s)` : ""}`);
+      blocking = errs.map((h) => ({ file: "(pipeline)", kind: "test" as const, severity: "high" as const, problem: h, fix: "" }));
       if (round === MAX_ROUNDS) break;
-      const fix = fixRound(c, coder.sessionId, `r${round}-gate`, `The pipeline's gate found hard errors in your work. Fix them:\n${g.hard.map((h) => `- ${h}`).join("\n")}`);
-      summary += `\n\nFIXES (round ${round}, gate errors):\n${fix.text}`;
+      const fix = fixRound(c, coder.sessionId, `r${round}-gate`, `The pipeline's own checks found problems before review. Fix them, then end with the COMPLETE traceability table again:\n${errs.map((h) => `- ${h}`).join("\n")}`);
+      summary += `\n\nFIXES (round ${round}, pipeline checks):\n${fix.text}`;
+      lastCoderText = fix.text;
       const before = g;
       g = gate(c, `after gate fix r${round}`, analystDone, false);
       changes = diffChanges(before, g);
@@ -680,11 +725,13 @@ function runCase(c: CaseState) {
     }
     rv = review(c, round, spec, caseBase, summary, g, changes, `r${round}`, blocking);
     blocking = blockingIssues(rv, g);
+    c.roundLog.push(`r${round} review: ${rv.ship && blocking.length === 0 ? "ship" : `${blocking.length} high`}`);
     if (rv.ship && blocking.length === 0) break;
     if (blocking.length === 0) { c.notes.push(`Round ${round}: ship=false without a high test issue: nothing concrete to fix`); break; }
     if (round === MAX_ROUNDS) { c.notes.push(`Round budget (${MAX_ROUNDS}) used up with ${blocking.length} blocking issues`); break; }
-    const fix = fixRound(c, coder.sessionId, `r${round}`, `A reviewer found these blocking issues. Fix them:\n${JSON.stringify(blocking, null, 2)}`);
+    const fix = fixRound(c, coder.sessionId, `r${round}`, `A reviewer found these blocking issues. Fix them, then end with the COMPLETE traceability table again:\n${JSON.stringify(blocking, null, 2)}`);
     summary += `\n\nFIXES (round ${round}):\n${fix.text}`;
+    lastCoderText = fix.text;
     const before = g;
     g = gate(c, `after fix r${round}`, analystDone, false);
     changes = diffChanges(before, g);
@@ -775,6 +822,10 @@ try {
       runCase(c);
     } catch (e) {
       if (e instanceof Interrupted) throw e;
+      // The Claude CLI exits cleanly on Ctrl+C, and Node only runs our SIGINT handler once the event loop gets a turn:
+      // give it one before deciding (run 10: a Ctrl+C was reported as "Case 4 failed").
+      await new Promise((r) => setImmediate(r));
+      if (wasInterrupted()) throw new Interrupted();
       if (!(e instanceof CaseFailed) && !(e instanceof AgentError)) throw e;
       c.status = e instanceof NeedsHuman ? "needs-human" : "failed";
       c.failReason ??= (e as Error).message;

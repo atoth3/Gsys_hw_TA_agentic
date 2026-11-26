@@ -24,7 +24,10 @@ Specs of earlier cases (keep terminology and test-data choices consistent with t
 1. Explore first. Look at what the requirement talks about, as it really is today, and write down what you actually saw in `observations` (exact texts, status codes, redirects, field names, counts). Observations are facts, not plans.
 2. Refine every original step. Each original step ID above must appear as at least one entry in `steps[]` (use `5.2a`, `5.2b` if you split a step). `original` = the step text verbatim; `refined` = an observable, checkable statement. Keep the original intent and strength: never turn "validate X equals Y" into "X exists".
 3. Decide every ambiguity yourself (you run unattended) and record it in `ambiguities[]` with your decision and its risk. A decision must be justified by the requirement wording or by your observations.
-4. Write `acceptance_criteria[]`: the observable statements that must all hold for the case to be done.
+4. Write `acceptance_criteria[]`: the observable statements that must all hold for the case to be done. Each gets an ID `AC-<step>[letter]` (for example `AC-3.3`), the original `step` it belongs to, and a `source`:
+   - `original`: the step's wording requires it. This is the normal case; usually ONE criterion per step, sometimes two.
+   - `added`: anything beyond the wording. Use it rarely, only when the test cannot be reliable without it, and say why in the text. Never add negative checks ("nothing else is bold"), intermediate pages, element types or extra counts just to be thorough.
+   The Coder must implement every `original` criterion, and the Reviewer blocks on them, so keep them minimal and exact.
 5. Put concrete test data you chose in `test_data`.
 
 # Requirement deviations (only if a step is UNFULFILLABLE as written)
