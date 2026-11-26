@@ -725,6 +725,12 @@ The plan was written before any code ran. These are the things the dry runs prov
   1. The traceability "gaps" were *again* a parser false alarm: the Coder escaped backticks inside an inline code span (`` \` ``). The parser now undoes all Markdown backslash escapes.
   2. Twice the Reviewer saw a hard-coded host and shipped it as minor, despite the "Must convention = high" rule. The gate now has a deterministic **host check**: a `goto`/`request.*`/`fetch` call with an `http(s)://` literal, or a `HOST`/`BASE_URL`-style constant, in the case's tests or in `pages/`/`utils/` is a hard error ("put it in `playwright.config.ts` as `baseURL`"). URL *assertions* on other hosts (Case 4's new tab) stay allowed.
 
+### Runs 15–16 (Case 0 under the new rules): ACCEPTED, new lean base for every later case
+- **Run 15 (stopped by hand):** the traceability check couldn't fit Case 0. Its criteria live in `package.json` and the workflow, which the gate already verifies, but the check searched only test/page/util code, so it rejected the Coder twice and the case would have ended unreviewed. Fix: the check skips Case 0. The stop itself left **no `report.md`**: most likely `npm` answers Ctrl+C with SIGTERM to its child, which killed the orchestrator. Fix: SIGTERM and SIGHUP are handled like SIGINT (not yet proven in a real stop).
+- **Run 16:** ACCEPTED in 11.5 min, `r1 review: 2 high → r2 review: ship`. Project files 227 → **182 lines**: the 80-line `writeJobSummary.js` is gone, and the summary is now inline in the workflow (66 → 102 lines). The smoke test is 9 lines.
+- Possible conventions conflict to revisit: the Reviewer blocked the 9-line smoke test for not using a page object (the "Must: Page Object Model for UI cases" rule). For a single smoke check that's ceremony.
+- **New base for later cases:** `ai/2026-11-26T11-23-39/integration` (Case 0 only, new rules).
+
 ### Still open
-- Case 3 under the new rules (size and rounds against run 10's 412 lines / 4 rounds), then Case 4. The host check and the escape fix are not yet exercised in a real run.
+- Case 2 next, from run 16's base; then Cases 1, 3, 4. The host check is not yet exercised by a case that navigates.
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.

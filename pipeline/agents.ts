@@ -29,7 +29,8 @@ let interrupted = false;
 let firstSigint = 0;
 /** Ctrl+C reaches the agent child too (same process group): the child dies, we throw Interrupted after it. */
 export function installInterruptHandler() {
-  process.on("SIGINT", () => {
+  // SIGTERM/SIGHUP too: npm answers a Ctrl+C by sending its child SIGTERM, which killed run 15 before report.md.
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, () => {
     // tsx (and npm) forward the terminal's SIGINT, so ONE Ctrl+C arrives two or three times within milliseconds.
     // Only a second Ctrl+C at least 2 s later means "give up now, skip the report".
     if (interrupted) { if (Date.now() - firstSigint > 2000) process.exit(130); return; }
