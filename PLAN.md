@@ -709,6 +709,22 @@ The plan was written before any code ran. These are the things the dry runs prov
 - **Ended `needs-human`, both causes in the pipeline:** (1) the traceability parser didn't unescape `\|` (correct Markdown inside a table cell), so a correct row was rejected twice and used up the round budget; (2) the Analyst quoted the *old* CONVENTIONS rule ("the test also asserts that format"), because the worktree's `CONVENTIONS.md` comes from the old base commit while the prompt carries the current one.
 - **Fixes:** the parser unescapes `\|`; agents may no longer read the worktree's `CONVENTIONS.md` (the prompt has the current text). In a final run from `main` the file can't be stale, but test runs from old bases can.
 
+### Run 14 (`2026-11-26T11-00-20`, Case 5): ACCEPTED at the manual solution's size
+(Run 13 died at its first call on the Claude session limit; nothing to learn from it.)
+- 7.5 min, 54 turns, `r1 trace: 2 gap(s) → r2 review: ship`. **17 lines, 2 `expect`s**, same as the manual solution (old rules: 67 / 15).
+
+| Case 5 | Lines | `expect`s | Codex reviews | Notes |
+|---|---|---|---|---|
+| Run 3 (old rules) | 67 | 15 | 2 | `test.step` everywhere, URL hard-coded |
+| Run 11 (proportionality v1) | 35 | 8 | 1 | tautological format asserts, URL hard-coded |
+| Run 12 (v2) | 19 | 2 | 1 (+2 false trace gaps) | `baseURL` used; ended `needs-human` on a parser bug |
+| Run 14 (v2 + parser fix) | 17 | 2 | 1 | `const HOST` hard-coded; Reviewer shipped it |
+| Manual | 17 | — | — | |
+
+- **Two last lessons, both "check it in code, not in the prompt":**
+  1. The traceability "gaps" were *again* a parser false alarm: the Coder escaped backticks inside an inline code span (`` \` ``). The parser now undoes all Markdown backslash escapes.
+  2. Twice the Reviewer saw a hard-coded host and shipped it as minor, despite the "Must convention = high" rule. The gate now has a deterministic **host check**: a `goto`/`request.*`/`fetch` call with an `http(s)://` literal, or a `HOST`/`BASE_URL`-style constant, in the case's tests or in `pages/`/`utils/` is a hard error ("put it in `playwright.config.ts` as `baseURL`"). URL *assertions* on other hosts (Case 4's new tab) stay allowed.
+
 ### Still open
-- Case 5 once more (should now pass cleanly), then Case 3 (rounds and size against run 10's 412 lines / 4 rounds).
+- Case 3 under the new rules (size and rounds against run 10's 412 lines / 4 rounds), then Case 4. The host check and the escape fix are not yet exercised in a real run.
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.

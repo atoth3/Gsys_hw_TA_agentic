@@ -290,6 +290,31 @@ function deviationCheck(id: number, spec: any): string[] {
   return errors;
 }
 
+/**
+ * CONVENTIONS "Must": hosts belong in playwright.config.ts (baseURL). Runs 11 and 14: the Reviewer saw a hard-coded
+ * host both times and still shipped it as a minor issue, so this is checked by code instead of by prompt.
+ * Looks at this case's test file and at pages/ + utils/ (shared, but this case may have touched them).
+ */
+function hostCheck(id: number): string[] {
+  const errors: string[] = [];
+  for (const dir of ["tests", "pages", "utils"]) {
+    const d = join(WT, dir);
+    if (!existsSync(d)) continue;
+    for (const f of readdirSync(d, { recursive: true }) as string[]) {
+      if (!/\.(ts|js)$/.test(f) || (dir === "tests" && !f.startsWith(`case-${id}-`))) continue;
+      readFileSync(join(d, f), "utf8").split("\n").forEach((line, i) => {
+        // Only navigation/requests and host constants: asserting a URL on another host (Case 4's new tab) is fine.
+        const navigates = /\b(goto|get|post|put|patch|delete|head|fetch)\(\s*['"`]https?:\/\//.test(line);
+        const hostConst = /\b(const|let)\s+\w*(HOST|BASE|ORIGIN|API_URL|BASE_URL)\w*\s*(:[^=]+)?=\s*['"`]https?:\/\//i.test(line);
+        if ((navigates || hostConst) && !/^\s*(\/\/|\*)/.test(line)) {
+          errors.push(`hard-coded host in ${dir}/${f}:${i + 1} (\`${line.trim().slice(0, 100)}\`): put it in playwright.config.ts as baseURL (per project if cases use different hosts) and use a relative path`);
+        }
+      });
+    }
+  }
+  return errors;
+}
+
 function pinCheck(): string[] {
   const errors: string[] = [];
   const pkg = loadJson(join(WT, "package.json"));
@@ -324,6 +349,7 @@ function gate(c: CaseState, label: string, coderFrom: string, full: boolean): Ga
   hard.push(...pathGuard(coderFrom, coderPaths(id), coderReadme(id)).map((e) => `coder ${e}`));
   const { spec } = readSpec(id);
   hard.push(...deviationCheck(id, spec));
+  hard.push(...hostCheck(id));
 
   if (!existsSync(join(WT, "package.json"))) hard.push("package.json is missing");
   else {
@@ -588,8 +614,8 @@ function traceCheck(id: number, spec: any, coderText: string): string[] {
   const rows = new Map<string, string>();
   for (const line of coderText.split("\n")) {
     const m = line.match(/^\s*\|\s*`?(AC-[\w.]+)`?\s*\|\s*(.+?)\s*\|\s*$/);
-    // Markdown tables escape a literal pipe as \| (run 12: a correct row was rejected twice for that).
-    if (m) rows.set(m[1], m[2].trim().replace(/\\\|/g, "|").replace(/^`+|`+$/g, ""));
+    // Undo Markdown backslash escapes: \| in tables (run 12), \` inside code spans (run 14).
+    if (m) rows.set(m[1], m[2].trim().replace(/\\([|`*_\\])/g, "$1").replace(/^`+|`+$/g, ""));
   }
   const files: string[] = [];
   for (const dir of ["tests", "pages", "utils"]) {
