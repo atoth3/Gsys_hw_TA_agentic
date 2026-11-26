@@ -390,6 +390,7 @@ const DENY = [
   `Read(/${MANUAL_DIR}/**)`, `Edit(/${MANUAL_DIR}/**)`, // the manual solution (contamination guard, layer 1)
   `Read(/${MAIN_REPO}/**)`, `Edit(/${MAIN_REPO}/**)`,   // your checkout: earlier runs' logs, PLAN.md
   `Read(/${WT}/PLAN.md)`, `Read(/${WT}/pipeline/**)`,     // the pipeline's own files inside the worktree (traps table!)
+  `Read(/${WT}/CONVENTIONS.md)`, // the worktree's copy comes from the base commit and may be stale; the prompt carries the current one (run 12)
   "Bash(*Gsys_hw_TA/*)", "Bash(*file://*)",
 ];
 const READ_ONLY_DENY = [...DENY, "Edit", "Write", "NotebookEdit"];
@@ -587,7 +588,8 @@ function traceCheck(id: number, spec: any, coderText: string): string[] {
   const rows = new Map<string, string>();
   for (const line of coderText.split("\n")) {
     const m = line.match(/^\s*\|\s*`?(AC-[\w.]+)`?\s*\|\s*(.+?)\s*\|\s*$/);
-    if (m) rows.set(m[1], m[2].trim().replace(/^`+|`+$/g, ""));
+    // Markdown tables escape a literal pipe as \| (run 12: a correct row was rejected twice for that).
+    if (m) rows.set(m[1], m[2].trim().replace(/\\\|/g, "|").replace(/^`+|`+$/g, ""));
   }
   const files: string[] = [];
   for (const dir of ["tests", "pages", "utils"]) {

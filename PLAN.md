@@ -704,6 +704,11 @@ The plan was written before any code ran. These are the things the dry runs prov
 - **Still wrong:** (1) the URL is still hard-coded: the Reviewer flagged it only as medium because the Analyst's spec spelled out the full URL, and medium never triggers a fix; (2) four tautological assertions in 5.4 re-check strings the test just built, from an Analyst criterion ("the test asserts the format") tagged `original` although the PDF only says "log"; (3) the traceability "gaps" were a false alarm: the Coder listed several assertions in one cell (`a / b`), which the parser didn't accept.
 - **Fixes:** Reviewer: a broken *Must* convention is high even if the spec says otherwise (spec = what, conventions = how), and tautological assertions are over-engineering. Analyst: "the test asserts X" is `original` only if the step says verify/validate/check; describe what must hold, never how to code it (no hosts, no assertion style). Parser: several assertions per cell, separated by ` / `.
 
+### Run 12 (`2026-11-26T10-45-42`, Case 5 again): the code is right, the pipeline tripped twice
+- **Code: 19 lines, 2 `expect`s, `baseURL` in `playwright.config.ts`, no `test.step`**, about the manual solution's 17. The Reviewer blocked the one leftover tautology (a regex over the test's own log lines) as over-engineering; the Coder deleted it in 27 s.
+- **Ended `needs-human`, both causes in the pipeline:** (1) the traceability parser didn't unescape `\|` (correct Markdown inside a table cell), so a correct row was rejected twice and used up the round budget; (2) the Analyst quoted the *old* CONVENTIONS rule ("the test also asserts that format"), because the worktree's `CONVENTIONS.md` comes from the old base commit while the prompt carries the current one.
+- **Fixes:** the parser unescapes `\|`; agents may no longer read the worktree's `CONVENTIONS.md` (the prompt has the current text). In a final run from `main` the file can't be stale, but test runs from old bases can.
+
 ### Still open
-- Rerun Case 5 once more to confirm the last fixes (cheap), then Case 3 (rounds and size against run 10's 412 lines / 4 rounds).
+- Case 5 once more (should now pass cleanly), then Case 3 (rounds and size against run 10's 412 lines / 4 rounds).
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
