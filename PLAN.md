@@ -669,6 +669,10 @@ The plan was written before any code ran. These are the things the dry runs prov
 ### Run 8 (`2026-11-26T07-56-06`, Case 1, `MAX_ROUNDS=4`): stopped by the Claude usage limit
 - The Analyst finished without a stall (10 min, 75 turns), Coder DONE, gate GREEN twice. Review went from 6 high issues (r1) to 3 (r2), then Coder fix r2 failed with "You've hit your session limit · resets 10am". The orchestrator recorded the failure and wrote the report as designed. Worktree and branches kept.
 
+### Run 9 (`2026-11-26T09-00-38`, Case 1, `MAX_ROUNDS=4`, after the limit reset): ACCEPTED and merged
+- 23 min, 159 turns, 0 flaky, not contaminated, no stall. Analyst 9 min, Coder 7.7 min, gate GREEN every round (3 repeats as `performance_glitch_user`). Review converged 4 → 2 → 0 high issues in 3 rounds, inside the 4-round budget; Acceptance ACCEPT at full original strength, no deviations.
+- **Result so far:** `ai/2026-11-26T09-00-38/integration` (local only) holds Cases 0, 1, 2 and 5, each squash-merged after passing every local gate. Superseded run branches (runs 3, 4, 5) are still there; `cleanup.ts <stamp>` removes them.
+
 ### Still open
-- Case 1: rerun after 10:00 (same command). The run with 4 review rounds is still to do (the `needs-human` result from run 5 is kept on `ai/2026-11-26T05-11-49/case-1-purchase`).
+- Build step 6: Cases 3–4 (onlinehtmleditor.dev, guru99). Open question from build step 5: the origin limit hides guru99's ad/consent iframes from the Analyst.
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
