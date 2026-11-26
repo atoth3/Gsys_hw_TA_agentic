@@ -1,0 +1,17 @@
+{
+  "name": "gsys-hw-ta-agentic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Genesys TypeScript homework: Playwright tests",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.39.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}
