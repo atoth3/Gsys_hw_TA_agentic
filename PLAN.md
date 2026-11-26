@@ -84,10 +84,11 @@ Case 0 runs first and creates the project skeleton (`package.json`, `playwright.
 
 ### Contamination guard
 The manual solution lives next door in `../Gsys_hw_TA`. Agents **must not read it**: they'd copy it, and the comparison would be worthless. Prompts and `--allowedTools` alone aren't enough, because read tools can usually reach files outside the working folder without asking. So the guard has three layers:
-1. **Deny rules:** every Claude agent gets `--disallowedTools "Read(<abs path>/Gsys_hw_TA/**)" "Bash(*Gsys_hw_TA/*)" "Bash(*file://*)"` plus the same rules in the `permissions.deny` of its `--settings`. The trailing `/` matters: the run's own worktree is `../Gsys_hw_TA_agentic-run-<stamp>`, which a bare `*Gsys_hw_TA*` would also block. Codex runs with its working root set to the worktree.
+1. **Deny rules:** every Claude agent gets `--disallowedTools "Read(//<abs path>/Gsys_hw_TA/**)" "Bash(*Gsys_hw_TA/*)" "Bash(*file://*)"` plus the same rules in the `permissions.deny` of its `--settings`. Note the **double slash**: in Claude Code permission rules `//path` is an absolute path, while `/path` is relative to the settings file (verified during the build: `Read(//…/secret/**)` blocks the Read tool with "File is in a directory that is denied"). The trailing `/` matters: the run's own worktree is `../Gsys_hw_TA_agentic-run-<stamp>`, which a bare `*Gsys_hw_TA*` would also block. Codex runs with its working root set to the worktree; its read-only sandbox can still *read* outside it, so for Codex the audit (layer 3) is the real guard.
+   **Added during the build:** the same deny list also covers your own checkout (`Read(//<repo>/**)`, which holds earlier runs' logs) and, inside the run worktree, `PLAN.md` and `pipeline/**`. `PLAN.md` contains the "known traps" table (section 5), and an agent that reads it would be told the answers.
    The Analyst's Playwright MCP is limited to the case sites' `http(s)` origins (`analyst-mcp.json`), so it can't open `file://…/Gsys_hw_TA/`.
 2. **Prompt rule:** "Only read files inside the current working directory."
-3. **Audit:** after each agent call, the orchestrator searches the agent's transcript (JSON output and tool calls) for `Gsys_hw_TA/` without the `_agentic` suffix. A hit marks the run **contaminated** in `report.md`; it can still finish, but its results don't count for the comparison.
+3. **Audit:** after each agent call, the orchestrator searches the agent's transcript for the manual solution's path: `Gsys_hw_TA` **not** followed by a word character or `-` (regex `/Gsys_hw_TA(?![\w-])/`, so `../Gsys_hw_TA` without a slash is caught too, while `Gsys_hw_TA_agentic…` is not). It checks only what the agent **asked for**: Claude's `tool_use` inputs (from `--output-format stream-json --verbose`) and Codex's command events (`--json`). Searching tool *results* would give false hits whenever a repo file mentions the folder. A hit marks the run **contaminated** in `report.md`; it can still finish, but its results don't count for the comparison.
 
 After the run, we compare the two solutions ourselves (section 9).
 
@@ -139,14 +140,15 @@ After the run, we compare the two solutions ourselves (section 9).
 **Job:** implement the refined spec as Playwright tests.
 
 - **Input:** refined spec (md + json), the **original** case text (so it can't drift from the source), the project skeleton.
-- **Tools:** `--permission-mode acceptEdits`, allow-list `Bash(npx playwright test:*)`, `Bash(npx tsc:*)`. Editable paths: `tests/`, `pages/`, `test/resources/`, `utils/`, and its own case subsection of the README's **"CI limitations"** (section 4c). In Case 0 only, also the config files, `.github/workflows/` and the "how to run" part of `README.md` (the skeleton comes from the orchestrator).
+- **Tools:** `--permission-mode acceptEdits`, allow-list `Bash(npx playwright test:*)`, `Bash(npx tsc:*)`, plus `npm install`/`npm ci`/`npm test` and `npx playwright install` (Case 0 must create the lockfile and browsers, Case 5 must add a library). Editable paths: `tests/`, `pages/`, `test/resources/`, `utils/`, **`package.json` + `package-lock.json` (every case: Case 5's "add Rest Api library" needs them; the pin check guards Playwright)**, and its own case subsection of the README's **"CI limitations"** (section 4c). In Case 0 only, also the config files, `.github/workflows/` and the "how to run" part of `README.md` (the README skeleton comes from the orchestrator).
 - **Output:** code + a summary + `STATUS: DONE | BLOCKED <reason>`.
 - **Conventions** (written once in `CONVENTIONS.md`, given to coder and reviewer): Page Object Model, role/text-based locators, no `waitForTimeout`, one spec file per case, test titles that start with the case ID, and the general CI-limitations rule from section 4c (no site named).
 
 ### ③ Gate (deterministic, in the orchestrator)
-1. `npx tsc --noEmit`: type errors stop the case.
-2. `npx playwright test tests/case-N*` with the JSON reporter: per-test status.
-3. `--repeat-each=3` on the new tests: a flaky test is treated as a failure, not "green 2 out of 3". (`performance_glitch_user` and guru99's ads make this case-relevant.)
+0. `npm ci` whenever the lockfile changed (so a lockfile that doesn't match `package.json` fails here, not first in CI), then `npx playwright install` once per run.
+1. `npx tsc --noEmit`: type errors are a **hard error**.
+2. + 3. **One run:** `npx playwright test tests/case-N- --repeat-each=3 --retries=0` with the line + JSON reporters. Per test: all repeats pass = passed, all fail = failed, mixed = **flaky**, treated as a failure, not "green 2 out of 3". (`performance_glitch_user` and guru99's ads make this case-relevant.) A case test that is *skipped* locally also makes the gate red (section 4c condition 1 needs a local pass).
+   **Hard errors** (tsc, broken suite, path guard, pin, deviation mismatch, actionlint) go straight back to the Coder as a fix round without calling the Reviewer: there is nothing worth reviewing yet. Such a round counts toward `MAX_ROUNDS`.
 4. Per-test diff against the previous run: tests that **flip pass → fail** or **disappear** are handed to the reviewer to judge (the Step 7 lesson: fewer passing tests isn't automatically a regression).
 5. Guard: `git diff --name-only` must stay inside the allowed paths (including the README subsection rule from section 6), and `package.json` must still pin `@playwright/test` to `1.39.0`.
 6. Deviation check (section 4b): spec `deviations[]` and README entries match one-to-one, and every evidence file exists.
@@ -166,6 +168,10 @@ After the run, we compare the two solutions ourselves (section 9).
   - `spec-gap`: the refined spec missed or weakened something from the original. The coder can't fix the spec, so these are passed to **Acceptance** as hints (⑤).
   - `site-issue`: the site really misbehaves against a requirement that's still meant (section 4b "not allowed" list). The test correctly fails; it's reported, not fixed.
 - **Loop:** only `high` **test** issues trigger another round. The fixer is the **coder resumed** (`--resume <session>`), so it remembers its own reasons. Stop when `ship=true` and no high test issue is open, or after `MAX_ROUNDS=3`.
+  **Added during the build:** a red gate that the Reviewer neither flags as a high test issue nor explains as a `site-issue` becomes a synthetic high issue ("the gate is red"), so a reviewer saying `ship=true` over failing tests can't end the loop.
+  **Added after dry run 2 (re-review scope):** from round 2 on, the Reviewer first checks each previously blocking issue (still unfixed = still high). A *new* high counts only if the fixes introduced it, or it shows a refined-spec or original step that the current code doesn't meet; anything it could have reported earlier is downgraded to medium (a follow-up). This makes the loop converge instead of finding fresh highs every round.
+  **Added after dry run 2 (`needs-human` status):** if the final gate is green but the round budget ran out with high issues open, or the Reviewer says `ship=false` without a concrete high issue, the case stops as **`needs-human`**, not `failed`. `report.md` then shows a "Your call" block: rerun with `MAX_ROUNDS+1`, or squash-merge the case branch by hand (Acceptance didn't run, so check it against the original yourself). A red gate is still `failed`.
+- **Contract:** Codex gets `--output-schema` (OpenAI's strict subset: `additionalProperties: false`, every property required, no `$schema`/`$id`/`title`, so the orchestrator writes a stripped copy). The Claude fallback and Acceptance use `claude -p --json-schema`, whose result arrives in `structured_output`. Both are validated again with `ajv`.
 
 ### ⑤ Acceptance (the Analyst again, as the final judge)
 **Job:** answer one question: *does the code fulfil the ORIGINAL requirement as written?*
@@ -264,6 +270,8 @@ main ─●─────────●──────────●──
 | CI → Merge | CI test report (JSON artifact) | every skipped test has a README CI-LIMIT entry, a matching reason, and a local pass (section 4c) |
 
 Every agent prompt includes the **UNATTENDED** block (never ask; decide and state; end with `STATUS: DONE | BLOCKED <reason>`; failing tests that expose a real mismatch are DONE, not BLOCKED) and the **ORACLE** rule (assert the documented requirement, never the site's current output).
+**Changed during the build:** the `STATUS:` line applies to the Analyst and Coder only. The Reviewer and Acceptance answer with a JSON object (schema-enforced), and a trailing status line would break it, so they get just "never ask questions". All prompts also get an **ISOLATION** block (only read inside the working directory; don't read `PLAN.md` or `pipeline/`). The blocks live in `pipeline/prompts/shared.md`.
+The Analyst gets **one repair attempt** (resumed session) when its spec breaks the contract (schema, step coverage, path guard, deviation check); a second failure fails the case.
 
 ## 4b. Requirement deviations (Analyst may amend, README records, Acceptance validates)
 
@@ -372,7 +380,9 @@ These are things I'd expect from the requirements and the sites. Don't put them 
      ai/<stamp>/case-1-purchase …         (from main, or from integration in local mode)
   runs/<stamp>/                        ← logs, manifest.json, report.md (in your checkout, gitignored)
   ```
-- **Clean agent environment:** `--settings '{"disableAllHooks": true}' --strict-mcp-config --disable-slash-commands`, so your global plugins and hooks don't leak in. The only MCP server allowed is Playwright MCP, and only for the Analyst (`--mcp-config analyst-mcp.json`).
+- **Clean agent environment:** `--setting-sources project --settings '{"disableAllHooks": true, "permissions": {"deny": […]}}' --strict-mcp-config --disable-slash-commands`, so your global plugins, hooks **and user-level allow rules** don't leak in (`--setting-sources project` was added during the build: without it a broad allow rule in your own `~/.claude/settings.json` would widen every agent's permissions).
+- **The run's worktree sits next to the main checkout**, even when the orchestrator runs from a Claude worktree under `.claude/worktrees/`: the path is derived from `git rev-parse --git-common-dir`.
+- **Local mode branches from the checkout's `HEAD`** (or `--base <ref>`), not from `main`, until the pipeline itself is merged into `main`. The only MCP server allowed is Playwright MCP, and only for the Analyst (`--mcp-config analyst-mcp.json`).
 - **Least privilege per role:**
 
 | Role | Edit files | Shell | Browser | Network |
@@ -475,7 +485,8 @@ The interesting output isn't only the tests. It's *how well the agentic workflow
 Gsys_hw_TA_agentic/
 ├── PLAN.md                     ← this file
 ├── requirements/homework.md    ← PDF transcribed, read-only for agents
-├── pipeline/
+├── pipeline/                   ← its OWN npm package (ajv, tsx): the root package.json belongs to the homework
+│   ├── package.json            ← run with `npm --prefix pipeline run orchestrate -- --cases 0,5`
 │   ├── orchestrator.ts         ← the loop, gates, contracts, report
 │   ├── agents.ts               ← claude()/codex() wrappers (from swarm.ts)
 │   ├── cleanup.ts              ← removes one run by its manifest (section 6)
@@ -524,7 +535,7 @@ Gsys_hw_TA_agentic/
 | 3 | Push and merge automatically? | **Local by default; `--merge` pushes, opens a PR and squash-merges to `main` when Reviewer, gate, Acceptance and CI are all green.** No separate `--publish` mode | ✅ decided |
 | 4 | Case 2 footer: assert `2023` or the current year? | **Current year**, derived at runtime, as a README deviation (section 4b) | ✅ decided |
 | 5 | May the Analyst change a requirement? | **Yes, only if it's unfulfillable as written**: smallest change, reasoning + evidence in `README.md`; Acceptance reads it and briefly validates the reason (section 4b) | ✅ decided |
-| 6 | Case 5: Playwright `request` or `axios`? | **Analyst decides** and records it; Acceptance checks the "add a library" wording | ✅ decided |
+| 6 | Case 5: Playwright `request` or `axios`? | **Analyst decides** and records it; Acceptance checks the "add a library" wording. Dry run 3: the Analyst chose the built-in `request` (APIRequestContext), Acceptance agreed, and **Adam confirmed it (2026-11-26)** | ✅ decided |
 | 7 | Run the tests in CI? | **Yes: GitHub Actions on every PR** (section 13) | ✅ decided |
 | 8 | A site blocks CI runners (Cloudflare on guru99)? | **Runtime skip only when the block page is detected; counts as green only with a local pass + README "CI limitations" entry + matching reason** (section 4c). No blanket CI skip, no getting around the protection | ✅ decided |
 | 9 | Reviewer: Codex or Claude? | Codex (different model) | default, not yet confirmed |
@@ -540,11 +551,13 @@ The local gate proves the tests pass **on your Mac, with your browsers, through 
 
 ### Who writes it
 The **Coder in Case 0**, from requirement X1, like any other code. The Reviewer reviews it, the gate runs `actionlint`, and Acceptance checks it against X1. It's a good test of the pipeline too: will the agents pin versions, use least-privilege permissions, and upload reports? The checklist below goes into `CONVENTIONS.md` so the reviewer has something concrete to check.
+**Kept out of `CONVENTIONS.md` on purpose:** the `ubuntu-22.04` runner pin from the sketch. It is a section 5 trap, so the agents have to find it themselves.
+**`actionlint` isn't installed on this machine yet** (`brew install actionlint`). Until it is, the gate logs "workflow lint SKIPPED" as a warning instead of failing.
 
 ### What the workflow must do (checklist, not code)
 - **Triggers:** `pull_request` to `main` (every case PR), `push` to `main` (re-checks the merged result), `workflow_dispatch`.
 - **Least privilege:** `permissions: contents: read`. No secrets needed: the credentials are public demo values and `credential.json` is committed, as the homework asks.
-- **Concurrency:** one run per branch, cancelling in-progress runs **only for PRs**. Push and nightly runs on `main` are never cancelled, because the merge rule uses them as its baseline.
+- **Concurrency:** one group per PR, cancelling in-progress runs **only for PRs**. Push and nightly runs on `main` are never cancelled **or replaced**, because the merge rule uses them as its baseline. **Corrected after dry run 2** (Codex found it): a concurrency group holds only *one pending* run, so the original per-branch group (`github.ref`) would let a third push to `main` silently drop the queued second push run, even with `cancel-in-progress: false`. Non-PR runs therefore get a unique group (`github.run_id`).
 - **Node:** matrix over `18` (the homework's minimum) and `20`, via `actions/setup-node` with npm cache.
 - **Install:** `npm ci`, then `npx playwright install --with-deps` using the **1.39.0** version from the lockfile. Don't use `@latest`, or the browsers won't match the pinned Playwright.
 - **Run:** the `npm test` script required by the preconditions, so CI also verifies that the runner script works.
@@ -566,7 +579,7 @@ on:
   schedule: [{ cron: "0 5 * * *" }]   # nightly site-drift check (decision 12)
 permissions: { contents: read }
 concurrency:
-  group: "${{ github.workflow }}-${{ github.ref }}"
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"  # PRs share a group; other runs never queue behind each other
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # never cancel main's baseline runs
 jobs:
   test:
@@ -592,6 +605,7 @@ jobs:
 
 ### Case 0 needs something to run
 A PR with zero tests makes `playwright test` fail with "no tests found". Case 0 therefore includes one **smoke test** (for example: the saucedemo login page loads). This also proves the workflow before any real case lands.
+**The smoke test opens a real page; it does not test the setup.** Steps 0.1–0.3 and X1 are verified by the gate (pin check, `npm test` script check, `tsc`, `actionlint`) and by the CI run itself, not by Playwright tests that parse `package.json` or workflow YAML (lesson from dry run 2, section 14).
 
 ### How CI feeds back into the pipeline
 With `--merge`, after each case PR is opened:
@@ -607,3 +621,133 @@ The tests hit **live third-party sites** that change without notice: the footer 
 ### What CI deliberately does *not* do
 - It doesn't run the agents. The agentic pipeline stays local (it needs your Claude/Codex logins); CI only runs the resulting tests.
 - It doesn't merge anything. Merging is done by the orchestrator, which has all four gate results; CI knows only one of them.
+
+---
+
+## 14. Dry-run log (build step 4: Case 0 + 5, local mode)
+
+The plan was written before any code ran. These are the things the dry runs proved wrong or missing. The fixes are already folded into the sections above; this is the record of *why*.
+
+### Run 1 (`2026-11-25T21-10-25`): stopped by hand during the first review
+- **Playwright 1.39.0's Chromium (build 1084, Chromium 119) crashes at launch on macOS 26** (`SEGV_ACCERR`, headless and headed). Firefox 118 and WebKit 17.4 from the same version work. The Coder found it, refused to weaken the test, and reported it, which was the right behaviour. No fix round could solve it, so the run was stopped.
+  **Decision (Adam):** keep `1.39.0`; it is fulfillable (Firefox/WebKit locally, all browsers on `ubuntu-22.04`), so it is *not* a requirement deviation. The pipeline now gives every agent an **Environment facts** block (`prompts/shared.md`) with the measured browser behaviour and lets the agents choose the browser and record why. In run 2 the Analyst chose Firefox for local and CI.
+- **Ctrl+C wrote no report.** `tsx`/`npm` forward the terminal's SIGINT, so one Ctrl+C arrived 2–3 times and hit the "second Ctrl+C = exit now" path. Fixed: repeats within 2 s are ignored.
+- Turn budgets were too tight (Coder used 79 of 80). The Analyst lost turns to permission denials for `node -v` and compound shell commands.
+
+### Run 2 (`2026-11-25T21-34-20`): Case 0 failed after 3 review rounds, Case 5 not run
+- Analyst, Coder and gate all worked (gate GREEN every round, 16 min total). The contracts, ajv validation, path guard, README skeleton, report and manifest all behaved as designed; `cleanup.ts` removed run 1 by its manifest.
+- **Failure: a reviewer arms race on X1.** The Analyst decided that X1 ("tests run in CI") should be asserted by the smoke test, which regex-checked the workflow YAML. Codex (correctly, in a narrow sense) proved each round, by mutating the YAML in memory, that the test missed yet another bad edit (`if: false`, `paths:` filters, a removed install step). Each fix produced 2–4 new "high" issues; the round budget ran out. This is Step 7's "critic is never happy" again, in a new form.
+  **Root cause in the plan:** it never said *how* setup/CI requirements are verified, so the Analyst invented "a test that parses config". **Fix:** 0.x and X1 are verified by the gate (pin, `npm test` script, `tsc`, `actionlint`) and by the CI run; no Playwright tests that parse `package.json` or YAML (`CONVENTIONS.md`, Analyst Case 0 note, section 13). Reviewer prompt: a high issue is a defect *in the current files*; "a future edit wouldn't be caught" is not one, and it must not mutate files to hunt for missing checks.
+- **Two more loop fixes** (made from the parent session at Adam's request, section 3 ④): a scoped re-review, so later rounds check the old highs instead of inventing new ones, and a `needs-human` case status for "gate green, reviewer still unconvinced", so the decision goes to a human instead of failing the case.
+- **One real finding adopted:** the concurrency group from section 13 could drop a queued push run on `main` (see section 13, Concurrency).
+- **Codex on a free ChatGPT plan** kept up for 3 reviews (about 35 s each). The orchestrator now falls back to a Claude reviewer if Codex fails, and records that in the report.
+
+### Run 3 (`2026-11-26T04-05-03`): both cases ACCEPTED and merged into the local integration branch
+- 25 min wall clock, 172 agent turns, 0 flaky, not contaminated. Each case: Analyst → Coder → gate GREEN → Codex `ship=false` (1–2 concrete high issues) → one fix round → Codex `ship=true` with 0 issues → full-suite gate GREEN → Acceptance ACCEPT → squash-merge. The loop converged in 2 rounds both times (run 2: never).
+- Codex found real defects this time, not hypotheticals: the CI job summary dropped the "Skipped in CI" table when nothing was skipped; the Case 5 test would accept a redirected response and counted log lines loosely.
+- **Case 5 trap ("Add Rest Api library"):** the Analyst chose Playwright's built-in `request` (APIRequestContext) and recorded it as a decision, not a deviation; Acceptance accepted it ("Playwright ships its own REST API client"). Decision 6 is therefore "agent decided: built-in client". The literal wording ("add … library") leans toward an extra dependency; Adam reviewed it and **confirmed the built-in client** (decision 6). Still worth comparing with the manual solution in section 9.
+- The worktree was removed on success, as designed; the result is on `ai/2026-11-26T04-05-03/integration` (local only, not pushed).
+
+### Build step 5: the Analyst's browser
+- `pipeline/analyst-mcp.json`: `@playwright/mcp@0.0.84` driving the **installed Google Chrome** (headless, `--isolated` in-memory profile). It uses the MCP's own recent Playwright, so the Chromium-119 crash doesn't apply to exploration. The orchestrator writes one config per case with that case's origins.
+- **Corrected assumption:** the plan treated `--allowed-origins` as the guard against `file://`. The MCP docs say it "does not serve as a security boundary". The `file://` protection is the MCP server's default refusal of files outside its workspace (smoke-tested: `file://` blocked, other origins `ERR_BLOCKED_BY_CLIENT`), plus our deny rules and the audit. Open question for Case 4: limiting origins also blocks guru99's ad/consent iframes, so the Analyst would see a cleaner page than the Coder's tests will. Revisit in build step 6.
+- `actionlint` 1.7.12 is now installed; run 3's merged workflow lints clean.
+
+### Run 4 (`2026-11-26T04-50-50`, Cases 1–2 from run 3's integration branch)
+- **Case 2 ACCEPTED and merged, with deviation D-2.6.** The Analyst *discovered* the footer trap by itself: the site renders `new Date().getFullYear()` (it read the app bundle), so 2023 is unobtainable. It amended to "current year computed at runtime" with screenshot + text evidence; the gate's spec↔README check passed. Acceptance **independently re-checked** the evidence (fetched the bundle) and answered yes to all three deviation questions. The Analyst also found a trap not in section 5: logged out, `/inventory.html` already shows an error, so a loose "an error is visible" check in 2.3 would pass without clicking Login. Review converged in 3 rounds under the scoped re-review rules.
+- **Case 1 failed: the Analyst ran out of turns** (50). Browser exploration costs a turn per action. Budget for Cases 1–4 is now 150.
+- **Pipeline bug found:** a failed agent's *untracked* files (Case 1's evidence screenshot) survived `git switch -f` and showed up in Case 2's branch, where the path guard would have blamed Case 2. Removed by hand mid-run; the orchestrator now commits a failed case's leftovers on its own branch and runs `git clean -fd`.
+
+### Run 5 (`2026-11-26T05-11-49`, Case 1 alone from run 4's integration branch)
+- Analyst DONE in 54 turns (so 50 really was too tight), Coder DONE, gate GREEN every round (3 repeats as `performance_glitch_user`, no flakiness; the Analyst measured its ~5 s busy-wait and planned a raised first-wait timeout instead of a sleep).
+- **Ended `needs-human`**, the first real use of that status: after 3 rounds one high issue was left. Step 1.5 should assert that each added product's button shows only "Remove" and no longer "Add to cart". That requirement comes from the *refined* spec, not the original ("add the following items to the cart", which 1.6's badge count and the cart page already prove). It's a judgment call for a human, which is what the status is for.
+
+### Runs 6 and 7 (Case 1 with `MAX_ROUNDS=4`, Adam's choice): both lost to a stalled API request
+- In both, the Analyst explored normally but slowly (about 26–30 browser actions in 20 minutes, against 54 turns in 8.6 minutes in run 5). Then a single request stalled: one `api_retry` event with `error: "unknown"`, then silence until the 30-minute agent timeout killed it. The Claude 5-hour window was at about 80% at the time (resets 10:00), which may explain the slowness. Neither the Coder nor the Reviewer ever ran.
+- **Fix:** agents now run in **15-minute time slices**. A slice that times out is **resumed in the same session** (`claude --resume`, "continue where you left off"), up to 3 times (`AGENT_MAX_RESUMES`), so the agent keeps its work. The partial transcript of a timed-out slice is now audited too (before, a timeout skipped the contamination audit). Tested with a deliberately short slice.
+
+### Run 8 (`2026-11-26T07-56-06`, Case 1, `MAX_ROUNDS=4`): stopped by the Claude usage limit
+- The Analyst finished without a stall (10 min, 75 turns), Coder DONE, gate GREEN twice. Review went from 6 high issues (r1) to 3 (r2), then Coder fix r2 failed with "You've hit your session limit · resets 10am". The orchestrator recorded the failure and wrote the report as designed. Worktree and branches kept.
+
+### Run 9 (`2026-11-26T09-00-38`, Case 1, `MAX_ROUNDS=4`, after the limit reset): ACCEPTED and merged
+- 23 min, 159 turns, 0 flaky, not contaminated, no stall. Analyst 9 min, Coder 7.7 min, gate GREEN every round (3 repeats as `performance_glitch_user`). Review converged 4 → 2 → 0 high issues in 3 rounds, inside the 4-round budget; Acceptance ACCEPT at full original strength, no deviations.
+- **Result so far:** `ai/2026-11-26T09-00-38/integration` (local only) holds Cases 0, 1, 2 and 5, each squash-merged after passing every local gate. Superseded run branches (runs 3, 4, 5) are still there; `cleanup.ts <stamp>` removes them.
+
+### Before build step 6: Analyst origin limit dropped
+- `--allowed-origins` is gone from `analyst-mcp.json`. It isn't a security boundary (MCP docs), and for Cases 3–4 it would distort what the Analyst sees: guru99's ad/consent iframes would be blocked, and a CDN-loaded editor might not load at all. The tests will meet those, so the Analyst must too. The `file://` guard (MCP default), the deny rules and the audit stay; the prompt asks the Analyst to stay on the case site.
+
+### Making the Coder more efficient (decided with Adam during run 10)
+**Observation:** in every browser case the first review found 3–6 high issues (Case 1: 6 and 4 in two runs, Case 2: 3, Case 3: 5) while the gate was green. They were almost never bad code but **missing or weaker checks**: the spec asked for something and the Coder skipped it. Case 3 then needed 4 rounds and still ended `needs-human`. So the leak is in the Analyst → Coder handoff. Four changes:
+1. **Numbered, atomic acceptance criteria.** `acceptance_criteria` in the spec schema is now a list of `{id: "AC-3.3a", step: "3.3", text, source}`. `source` is **`original`** (the PDF's wording requires it) or **`added`** (the Analyst's extra strictness: negative checks, intermediate states, robustness).
+2. **Coder traceability table, checked by code.** Every Coder reply ends with `| AC-ID | test.step title | assertion |`. Before calling the Reviewer, the orchestrator checks that every AC ID has a row and that the named `test.step` really occurs in the case's test file. A gap is a fix round *without* a review, like a gate hard error. Cheaper and more reliable than asking the Coder to review itself.
+3. **Reviewer severity follows the source.** A missing or weakened `original` criterion is high; an `added` one is medium (a follow-up, never blocking). Acceptance still judges against the PDF, so nothing required is lost. This targets the run 5 pattern, where the Analyst's own extras kept Case 1 from shipping.
+4. **Metrics.** `report.md` shows each case's rounds step by step ("r1 trace: 2 gap(s) → r2 review: 3 high → r3 review: ship"), so the effect can be measured instead of guessed. **Test:** rerun Case 3 alone and compare with run 10 (5 → 4 → 2 → 1 high in 4 rounds, `needs-human`).
+
+### Run 10 (`2026-11-26T09-28-26`, Cases 3–4): stopped by hand, and the biggest lesson so far
+- **Case 3:** `needs-human` after 4 rounds (5 → 4 → 2 → 1 high), gate green throughout.
+- **Case 4:** the Analyst found **two real deviations** not in section 5: the new tab's title is now "Selenium Live Project for Practice" (D-4.3), and "Join Now" no longer exists on the Selenium page (D-4.6). The first time-slice resume happened here (slow exploration, 79 tool calls, not a stall); it resumed cleanly. Then the gate went red: with Playwright 1.39's Firefox/WebKit, `page.goto` on guru99 never fires `load` (two CDN background images never finish loading); `domcontentloaded` arrives in 2 s. It's fixable in the test, but the run was stopped (see below).
+- **Adam compared the output with his manual solution: far too big.** Measured by line counts only (the manual code was not read, to keep the comparison clean): Case 5: 17 vs 67 lines; Case 3: 27 vs 412; Case 4: 31 vs 285; Cases 1–2: about 290 vs 560; overall 480 vs about 1,470 plus an 80-line CI summary script. Case 1 alone had 42 `expect`s. Also every step wrapped in `test.step`, and hosts hard-coded instead of `baseURL`.
+- **Root causes, all in the pipeline's design:** (1) the Analyst inflated the spec with negative checks and intermediate states; (2) the Reviewer treated every spec line as "required", so each round *added* assertions, with nothing ever asking "is this necessary?"; (3) our own CONVENTIONS demanded `test.step` for every step; (4) nothing asked for simplicity or idiomatic config, and the oracle rule ("never weaken") only pushes one way; (5) the planned traceability check would have *enforced* the extras.
+
+### Proportionality (Adam's decision, replaces items 2–3 of the efficiency plan above)
+- **New `PROPORTIONALITY` prompt block** (Analyst, Coder, Reviewer): the smallest solution that fully meets the original requirement; extra assertions, helpers and abstractions are a cost, not a bonus; don't invent requirements; over-engineering is a defect.
+- **CONVENTIONS.md:** a Proportionality section (assert what's asked, once; no speculative robustness; `baseURL` and timeouts in `playwright.config.ts`; thin page objects); `test.step` is now optional; the CI job summary stays a few lines inline instead of a script.
+- **Analyst:** usually one `original` criterion per step; `added` is rare and must say why.
+- **Traceability check:** enforces `original` criteria only. The Coder copies the exact assertion line into the table, and the orchestrator checks that it occurs in the code (no `test.step` needed).
+- **Reviewer:** reviews "too little" *and* "too much" with equal weight. Strength is judged against the ORIGINAL wording, not the spec's extras; a missing `added` criterion is medium; clear over-engineering is high.
+- Also fixed: a Ctrl+C was recorded as "Case 4 failed" instead of `interrupted` (the CLI exits cleanly on SIGINT, and Node runs the handler only after the blocking call returns).
+- **Consequence:** the earlier results (Cases 0, 1, 2, 5 on `ai/2026-11-26T09-00-38/integration`) were written under the old rules. They stay as a reference, but the final run must regenerate all cases under the new rules.
+
+### Run 11 (`2026-11-26T10-36-12`, Case 5 alone, first run under the proportionality rules): ACCEPTED, half the size
+- 7.5 min, 46 turns. Rounds: `r1 trace: 2 gap(s) → r2 review: ship`. The first Codex review already said ship.
+- Size: **35 lines / 8 `expect`s** (old rules: 67 / 15; manual: 17 lines).
+- **Still wrong:** (1) the URL is still hard-coded: the Reviewer flagged it only as medium because the Analyst's spec spelled out the full URL, and medium never triggers a fix; (2) four tautological assertions in 5.4 re-check strings the test just built, from an Analyst criterion ("the test asserts the format") tagged `original` although the PDF only says "log"; (3) the traceability "gaps" were a false alarm: the Coder listed several assertions in one cell (`a / b`), which the parser didn't accept.
+- **Fixes:** Reviewer: a broken *Must* convention is high even if the spec says otherwise (spec = what, conventions = how), and tautological assertions are over-engineering. Analyst: "the test asserts X" is `original` only if the step says verify/validate/check; describe what must hold, never how to code it (no hosts, no assertion style). Parser: several assertions per cell, separated by ` / `.
+
+### Run 12 (`2026-11-26T10-45-42`, Case 5 again): the code is right, the pipeline tripped twice
+- **Code: 19 lines, 2 `expect`s, `baseURL` in `playwright.config.ts`, no `test.step`**, about the manual solution's 17. The Reviewer blocked the one leftover tautology (a regex over the test's own log lines) as over-engineering; the Coder deleted it in 27 s.
+- **Ended `needs-human`, both causes in the pipeline:** (1) the traceability parser didn't unescape `\|` (correct Markdown inside a table cell), so a correct row was rejected twice and used up the round budget; (2) the Analyst quoted the *old* CONVENTIONS rule ("the test also asserts that format"), because the worktree's `CONVENTIONS.md` comes from the old base commit while the prompt carries the current one.
+- **Fixes:** the parser unescapes `\|`; agents may no longer read the worktree's `CONVENTIONS.md` (the prompt has the current text). In a final run from `main` the file can't be stale, but test runs from old bases can.
+
+### Run 14 (`2026-11-26T11-00-20`, Case 5): ACCEPTED at the manual solution's size
+(Run 13 died at its first call on the Claude session limit; nothing to learn from it.)
+- 7.5 min, 54 turns, `r1 trace: 2 gap(s) → r2 review: ship`. **17 lines, 2 `expect`s**, same as the manual solution (old rules: 67 / 15).
+
+| Case 5 | Lines | `expect`s | Codex reviews | Notes |
+|---|---|---|---|---|
+| Run 3 (old rules) | 67 | 15 | 2 | `test.step` everywhere, URL hard-coded |
+| Run 11 (proportionality v1) | 35 | 8 | 1 | tautological format asserts, URL hard-coded |
+| Run 12 (v2) | 19 | 2 | 1 (+2 false trace gaps) | `baseURL` used; ended `needs-human` on a parser bug |
+| Run 14 (v2 + parser fix) | 17 | 2 | 1 | `const HOST` hard-coded; Reviewer shipped it |
+| Manual | 17 | — | — | |
+
+- **Two last lessons, both "check it in code, not in the prompt":**
+  1. The traceability "gaps" were *again* a parser false alarm: the Coder escaped backticks inside an inline code span (`` \` ``). The parser now undoes all Markdown backslash escapes.
+  2. Twice the Reviewer saw a hard-coded host and shipped it as minor, despite the "Must convention = high" rule. The gate now has a deterministic **host check**: a `goto`/`request.*`/`fetch` call with an `http(s)://` literal, or a `HOST`/`BASE_URL`-style constant, in the case's tests or in `pages/`/`utils/` is a hard error ("put it in `playwright.config.ts` as `baseURL`"). URL *assertions* on other hosts (Case 4's new tab) stay allowed.
+
+### Runs 15–16 (Case 0 under the new rules): ACCEPTED, new lean base for every later case
+- **Run 15 (stopped by hand):** the traceability check couldn't fit Case 0. Its criteria live in `package.json` and the workflow, which the gate already verifies, but the check searched only test/page/util code, so it rejected the Coder twice and the case would have ended unreviewed. Fix: the check skips Case 0. The stop itself left **no `report.md`**: most likely `npm` answers Ctrl+C with SIGTERM to its child, which killed the orchestrator. Fix: SIGTERM and SIGHUP are handled like SIGINT (not yet proven in a real stop).
+- **Run 16:** ACCEPTED in 11.5 min, `r1 review: 2 high → r2 review: ship`. Project files 227 → **182 lines**: the 80-line `writeJobSummary.js` is gone, and the summary is now inline in the workflow (66 → 102 lines). The smoke test is 9 lines.
+- Possible conventions conflict to revisit: the Reviewer blocked the 9-line smoke test for not using a page object (the "Must: Page Object Model for UI cases" rule). For a single smoke check that's ceremony.
+- **New base for later cases:** `ai/2026-11-26T11-23-39/integration` (Case 0 only, new rules).
+
+### Final run (local): all six cases ACCEPTED
+Run 16 (Case 0) → `2026-11-26T11-43-29` (Cases 1, 2, 5; 29 min) → `2026-11-26T12-17-00` (Cases 3, 4; 48 min). Result: **`ai/2026-11-26T12-17-00/integration`**, one squashed commit per case (`c5930db` Case 0, `86d5ae0` 1, `deaf458` 2, `029185b` 5, `9cc8012` 3, `8b1cc39` 4). 0 flaky, not contaminated, no `needs-human`.
+
+| Case | Review rounds | Notes |
+|---|---|---|
+| 0 | 2 | 9-line smoke test, workflow lints clean |
+| 1 | 2 | 45-line test, 3 `expect`s |
+| 2 | **1** | deviation D-2.6 (footer year, runtime) |
+| 3 | 3 | 36-line test + 41-line page object (run 10: 412 lines) |
+| 4 | **1** (+1 host fix) | deviations D-4.3 (tab title) and D-4.6 ("Join Now" gone, "Subscribe for Free" button instead), both re-checked by Acceptance with `curl`; `waitUntil: 'domcontentloaded'` for guru99 |
+| 5 | 1 (+2 gate/trace) | 14 lines; `api` project with its own `baseURL` |
+
+**Size: 479 lines** of project code (tests, pages, utils, config, package.json), plus a 102-line workflow. The manual solution is 480 lines (counted the same way, contents not read). Each host is a Playwright project with its own `baseURL` (default saucedemo, plus `api`, `editor`, `guru99`).
+- The **host check** fired three times (Cases 3, 4, 5); each time the Coder moved the host into a config project in one quick round. Prompts alone hadn't achieved that.
+- **For the human review:** D-4.6 substitutes a different button for the removed "Join Now" (Acceptance accepted it as the smallest change); `test/` (credential.json, literally required by step 1.2) next to `tests/`; `test.step` still used.
+
+### Still open
+- Push the result and run CI on GitHub once (Cloudflare on guru99 is expected to show up there, section 4c).
+- Human review, then a short "How this was built" write-up.
+- The Analyst's narrow shell allow-list still denies compound commands; harmless so far.

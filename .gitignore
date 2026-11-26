@@ -1,0 +1,11 @@
+# pipeline run logs (section 7 of PLAN.md)
+runs/
+
+# dependencies
+node_modules/
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

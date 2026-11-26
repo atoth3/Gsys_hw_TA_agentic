@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "acceptance.schema.json",
+  "title": "Acceptance → Publish/Merge: verdict against the ORIGINAL requirement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case", "verdict", "reason", "rows", "deviation_checks"],
+  "properties": {
+    "case": { "type": "integer", "minimum": 0, "maximum": 5 },
+    "verdict": { "type": "string", "enum": ["ACCEPT", "REJECT"] },
+    "reason": { "type": "string" },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One row per ORIGINAL step ID (0.1, X1, 5.4 …)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "original", "covered_by", "assertion", "deviation", "ok", "note"],
+        "properties": {
+          "step": { "type": "string", "pattern": "^(\\d+\\.\\d+|X\\d+)$" },
+          "original": { "type": "string" },
+          "covered_by": { "type": "string", "description": "file › test title (or config/workflow file for setup steps)" },
+          "assertion": { "type": "string", "description": "The concrete check in the code, or what the file does" },
+          "deviation": { "type": "string", "description": "README entry ID (D-2.6, CI-LIMIT-4) or '—'" },
+          "ok": { "type": "boolean" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "deviation_checks": {
+      "type": "array",
+      "description": "One per README 'Requirement deviations' / 'CI limitations' entry of this case; empty if none",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "unfulfillable_as_written", "smallest_change", "implemented_not_weaker", "note"],
+        "properties": {
+          "id": { "type": "string" },
+          "unfulfillable_as_written": { "type": "boolean" },
+          "smallest_change": { "type": "boolean" },
+          "implemented_not_weaker": { "type": "boolean" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  }
+}

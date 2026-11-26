@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "spec.schema.json",
+  "title": "Analyst → Coder: refined spec for one case (specs/case-N.json)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case", "summary", "preconditions", "steps", "acceptance_criteria", "observations", "ambiguities", "deviations", "test_data", "status"],
+  "properties": {
+    "case": { "type": "integer", "minimum": 0, "maximum": 5 },
+    "summary": { "type": "string", "minLength": 10 },
+    "preconditions": { "type": "array", "items": { "type": "string" } },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "original", "refined"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^(\\d+\\.\\d+|X\\d+)[a-z]?$", "description": "Original step ID, optionally with a letter suffix when one original step is split (5.2a, 5.2b)" },
+          "original": { "type": "string", "minLength": 1 },
+          "refined": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Atomic, checkable criteria. The Coder maps each ID to a test.step + assertion; the Reviewer grades a missing one by its source.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "step", "text", "source"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^AC-(\\d+\\.\\d+|X\\d+)[a-z]?$", "description": "AC-<original step id><optional letter>, e.g. AC-3.3a" },
+          "step": { "type": "string", "pattern": "^(\\d+\\.\\d+|X\\d+)$", "description": "The original step this criterion belongs to" },
+          "text": { "type": "string", "minLength": 5, "description": "One observable, checkable statement" },
+          "source": { "enum": ["original", "added"], "description": "original = the original step's wording requires it; added = the Analyst's extra strictness (negative checks, intermediate states, robustness)" }
+        }
+      }
+    },
+    "observations": { "type": "array", "items": { "type": "string" } },
+    "ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "decision", "risk"],
+        "properties": {
+          "question": { "type": "string" },
+          "decision": { "type": "string" },
+          "risk": { "enum": ["low", "medium", "high"] }
+        }
+      }
+    },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "original", "amended", "why_unfulfillable", "evidence", "why_this_amendment"],
+        "properties": {
+          "step": { "type": "string", "pattern": "^(\\d+\\.\\d+|X\\d+)$" },
+          "original": { "type": "string" },
+          "amended": { "type": "string" },
+          "why_unfulfillable": { "type": "string" },
+          "evidence": { "type": "string", "pattern": "docs/evidence/case-\\d+/", "description": "Must name a committed file under docs/evidence/case-N/" },
+          "why_this_amendment": { "type": "string" }
+        }
+      }
+    },
+    "test_data": { "type": "object" },
+    "status": { "enum": ["DONE", "BLOCKED"] },
+    "blocked_reason": { "type": "string" }
+  }
+}
