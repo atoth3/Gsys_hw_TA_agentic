@@ -731,6 +731,23 @@ The plan was written before any code ran. These are the things the dry runs prov
 - Possible conventions conflict to revisit: the Reviewer blocked the 9-line smoke test for not using a page object (the "Must: Page Object Model for UI cases" rule). For a single smoke check that's ceremony.
 - **New base for later cases:** `ai/2026-11-26T11-23-39/integration` (Case 0 only, new rules).
 
+### Final run (local): all six cases ACCEPTED
+Run 16 (Case 0) → `2026-11-26T11-43-29` (Cases 1, 2, 5; 29 min) → `2026-11-26T12-17-00` (Cases 3, 4; 48 min). Result: **`ai/2026-11-26T12-17-00/integration`**, one squashed commit per case (`c5930db` Case 0, `86d5ae0` 1, `deaf458` 2, `029185b` 5, `9cc8012` 3, `8b1cc39` 4). 0 flaky, not contaminated, no `needs-human`.
+
+| Case | Review rounds | Notes |
+|---|---|---|
+| 0 | 2 | 9-line smoke test, workflow lints clean |
+| 1 | 2 | 45-line test, 3 `expect`s |
+| 2 | **1** | deviation D-2.6 (footer year, runtime) |
+| 3 | 3 | 36-line test + 41-line page object (run 10: 412 lines) |
+| 4 | **1** (+1 host fix) | deviations D-4.3 (tab title) and D-4.6 ("Join Now" gone, "Subscribe for Free" button instead), both re-checked by Acceptance with `curl`; `waitUntil: 'domcontentloaded'` for guru99 |
+| 5 | 1 (+2 gate/trace) | 14 lines; `api` project with its own `baseURL` |
+
+**Size: 479 lines** of project code (tests, pages, utils, config, package.json), plus a 102-line workflow. The manual solution is 480 lines (counted the same way, contents not read). Each host is a Playwright project with its own `baseURL` (default saucedemo, plus `api`, `editor`, `guru99`).
+- The **host check** fired three times (Cases 3, 4, 5); each time the Coder moved the host into a config project in one quick round. Prompts alone hadn't achieved that.
+- **For the human review:** D-4.6 substitutes a different button for the removed "Join Now" (Acceptance accepted it as the smallest change); `test/` (credential.json, literally required by step 1.2) next to `tests/`; `test.step` still used.
+
 ### Still open
-- Case 2 next, from run 16's base; then Cases 1, 3, 4. The host check is not yet exercised by a case that navigates.
+- Push the result and run CI on GitHub once (Cloudflare on guru99 is expected to show up there, section 4c).
+- Human review, then a short "How this was built" write-up.
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
