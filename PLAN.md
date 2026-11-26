@@ -535,7 +535,7 @@ Gsys_hw_TA_agentic/
 | 3 | Push and merge automatically? | **Local by default; `--merge` pushes, opens a PR and squash-merges to `main` when Reviewer, gate, Acceptance and CI are all green.** No separate `--publish` mode | ✅ decided |
 | 4 | Case 2 footer: assert `2023` or the current year? | **Current year**, derived at runtime, as a README deviation (section 4b) | ✅ decided |
 | 5 | May the Analyst change a requirement? | **Yes, only if it's unfulfillable as written**: smallest change, reasoning + evidence in `README.md`; Acceptance reads it and briefly validates the reason (section 4b) | ✅ decided |
-| 6 | Case 5: Playwright `request` or `axios`? | **Analyst decides** and records it; Acceptance checks the "add a library" wording | ✅ decided |
+| 6 | Case 5: Playwright `request` or `axios`? | **Analyst decides** and records it; Acceptance checks the "add a library" wording. Dry run 3: the Analyst chose the built-in `request` (APIRequestContext), Acceptance agreed, and **Adam confirmed it (2026-11-26)** | ✅ decided |
 | 7 | Run the tests in CI? | **Yes: GitHub Actions on every PR** (section 13) | ✅ decided |
 | 8 | A site blocks CI runners (Cloudflare on guru99)? | **Runtime skip only when the block page is detected; counts as green only with a local pass + README "CI limitations" entry + matching reason** (section 4c). No blanket CI skip, no getting around the protection | ✅ decided |
 | 9 | Reviewer: Codex or Claude? | Codex (different model) | default, not yet confirmed |
@@ -645,7 +645,7 @@ The plan was written before any code ran. These are the things the dry runs prov
 ### Run 3 (`2026-11-26T04-05-03`): both cases ACCEPTED and merged into the local integration branch
 - 25 min wall clock, 172 agent turns, 0 flaky, not contaminated. Each case: Analyst → Coder → gate GREEN → Codex `ship=false` (1–2 concrete high issues) → one fix round → Codex `ship=true` with 0 issues → full-suite gate GREEN → Acceptance ACCEPT → squash-merge. The loop converged in 2 rounds both times (run 2: never).
 - Codex found real defects this time, not hypotheticals: the CI job summary dropped the "Skipped in CI" table when nothing was skipped; the Case 5 test would accept a redirected response and counted log lines loosely.
-- **Case 5 trap ("Add Rest Api library"):** the Analyst chose Playwright's built-in `request` (APIRequestContext) and recorded it as a decision, not a deviation; Acceptance accepted it ("Playwright ships its own REST API client"). Decision 6 is therefore "agent decided: built-in client". **Worth a human look:** the literal wording ("add … library") leans toward an extra dependency, and the manual solution may differ. This is exactly the kind of judgment call section 9 ("requirement fidelity") is meant to compare.
+- **Case 5 trap ("Add Rest Api library"):** the Analyst chose Playwright's built-in `request` (APIRequestContext) and recorded it as a decision, not a deviation; Acceptance accepted it ("Playwright ships its own REST API client"). Decision 6 is therefore "agent decided: built-in client". The literal wording ("add … library") leans toward an extra dependency; Adam reviewed it and **confirmed the built-in client** (decision 6). Still worth comparing with the manual solution in section 9.
 - The worktree was removed on success, as designed; the result is on `ai/2026-11-26T04-05-03/integration` (local only, not pushed).
 
 ### Still open
