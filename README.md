@@ -14,7 +14,7 @@ npm test
 
 All browser tests run on Firefox (one Playwright project per site, each with its own `baseURL`; Case 5 uses an `api` project): Playwright 1.39.0's Chromium build crashes at launch on Apple Silicon macOS, so Firefox (118.0.1, the build bundled with 1.39.0) is the browser that works identically on the local dev machine and on CI's `ubuntu-22.04` runner.
 
-CI (`.github/workflows/playwright.yml`) runs the same `npm test` script on every pull request to `main`, every push to `main`, on a nightly schedule, and on manual dispatch, against Node 18 and 20 on `ubuntu-22.04`.
+CI (`.github/workflows/playwright.yml`) runs the same `npm test` script on every pull request to `main`, every push to `main`, on a nightly schedule, and on manual dispatch, against Node 18 (the minimum the homework names) on `ubuntu-22.04`.
 
 ## Cases
 

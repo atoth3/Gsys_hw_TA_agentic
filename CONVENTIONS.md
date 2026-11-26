@@ -46,7 +46,7 @@ Some sites block data-centre IPs (GitHub Actions runners) with bot protection. W
 - Triggers: `pull_request` to `main`, `push` to `main`, `workflow_dispatch`, and a nightly `schedule`.
 - `permissions: contents: read`; no secrets.
 - `concurrency`: pull requests share one group per PR and cancel their in-progress runs; push, nightly and manual runs must never cancel or replace each other (a concurrency group keeps only ONE pending run, so a shared group for pushes to `main` would silently drop a queued push run). For example `group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}` with `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`.
-- Node matrix `18` and `20` via `actions/setup-node` with npm cache; `fail-fast: false`.
+- Node `18` (the minimum "18 or newer" names) via `actions/setup-node` with npm cache. One version is enough: the tests barely depend on Node.
 - `npm ci`, then `npx playwright install --with-deps` (the version from the lockfile, never `@latest`), then `npm test`.
 - `playwright.config.ts` with `process.env.CI`: `forbidOnly: true`, `retries: 1`, `trace: 'on-first-retry'`, reporters `github` + `html` + `json` (to `test-results/results.json`).
 - Upload `playwright-report/` and `test-results/` with `if: ${{ !cancelled() }}`.
