@@ -17,6 +17,10 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 // ── Errors + Ctrl+C ──────────────────────────────────────────────────────────
 export class AgentError extends Error {}
+/** A call that hit its time slice. Carries what's needed to resume it and to audit the partial transcript. */
+export class AgentTimeout extends AgentError {
+  constructor(message: string, public sessionId: string | undefined, public seconds: number, public contamination: string[]) { super(message); }
+}
 export class Interrupted extends Error {
   constructor() { super("interrupted by Ctrl+C"); }
 }
@@ -155,10 +159,12 @@ export function claude(c: ClaudeCall): AgentResult {
   writeFileSync(`${c.logBase}.jsonl`, res.stdout ?? "");
   if (res.stderr) writeFileSync(`${c.logBase}.stderr.log`, res.stderr);
   checkInterrupt(res);
-  if (res.error?.message.includes("ETIMEDOUT")) throw new AgentError(`${c.step} timed out after ${seconds}s`);
-
   // The result event is not always the last line (summaries may follow it).
   const events = (res.stdout ?? "").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } });
+  if (res.error?.message.includes("ETIMEDOUT")) {
+    const sessionId = events.find((e) => e?.type === "system" && e?.subtype === "init")?.session_id;
+    throw new AgentTimeout(`${c.step} timed out after ${seconds}s`, sessionId, seconds, auditTranscript(res.stdout ?? "", "claude"));
+  }
   const j = events.findLast((e) => e?.type === "result");
   if (!j) throw new AgentError(`${c.step} crashed (exit ${res.status}): ${(res.stderr || res.stdout || "").slice(-500)}`);
   // Fix 1: a failed agent is a failed step, not "no changes". error_max_turns is a failure too.
@@ -181,6 +187,37 @@ export function claude(c: ClaudeCall): AgentResult {
     `${result.denials.length ? `, ⚠️ ${result.denials.length} permission denials` : ""}` +
     `${result.contamination.length ? `, 🚨 ${result.contamination.length} CONTAMINATION hits` : ""})`);
   return result;
+}
+
+/**
+ * claude() in time slices: a call that hits its timeout is RESUMED in the same session (the agent keeps its work),
+ * up to `maxResumes` times. Runs 6 and 7 lost a whole case each to one stalled API request (an api_retry with
+ * error "unknown", then silence until the 30-minute timeout).
+ */
+export function claudeResumable(c: ClaudeCall, maxResumes = Number(process.env.AGENT_MAX_RESUMES ?? 3)): AgentResult {
+  let call = c;
+  let seconds = 0;
+  const contamination: string[] = [];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = claude(call);
+      r.seconds += seconds;
+      r.contamination.unshift(...contamination);
+      return r;
+    } catch (e) {
+      if (!(e instanceof AgentTimeout) || !e.sessionId || attempt >= maxResumes) throw e;
+      seconds += e.seconds;
+      contamination.push(...e.contamination); // the partial transcript is audited too
+      console.warn(`⏱  ${c.step}: time slice used up (stalled request?), resuming session ${e.sessionId.slice(0, 8)} (${attempt + 1}/${maxResumes})`);
+      call = {
+        ...c, resumeId: e.sessionId, logBase: `${c.logBase}.resume${attempt + 1}`,
+        step: `${c.step} (resume ${attempt + 1})`,
+        prompt: "Your previous turn was cut off (the pipeline's time slice ended, probably a stalled API request). " +
+          "Nothing you did is lost. Continue the SAME task from where you stopped, and finish it exactly as originally instructed " +
+          "(including the required final STATUS line or structured output).",
+      };
+    }
+  }
 }
 
 export type CodexCall = {

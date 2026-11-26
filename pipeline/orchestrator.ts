@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
-  AgentError, type AgentResult, type CaseRow, type TestRun, Interrupted, checkStatus, claude, cleanEnvArgs, codex,
+  AgentError, type AgentResult, type CaseRow, type TestRun, Interrupted, checkStatus, claudeResumable, cleanEnvArgs, codex,
   commit, compareRuns, fmtDuration, installInterruptHandler, renderTable, runTests, sh, shTry, summarize,
 } from "./agents.ts";
 
@@ -32,7 +32,7 @@ const MODELS = {
   acceptance: process.env.ACCEPTANCE_MODEL ?? "opus",
   reviewer: process.env.REVIEWER_MODEL, // undefined = the CLI's default
 };
-const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MIN ?? 30) * 60_000;
+const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MIN ?? 15) * 60_000; // one time slice; claudeResumable() resumes up to 3 times
 const TURNS = { analyst: 50, analystBrowser: 150, coder: 120, acceptance: 40, reviewer: 40 }; // dry run 1: Case 0 coder used 79 of 80; run 4: browser Analyst hit 50
 
 const PIPE = import.meta.dirname;
@@ -474,7 +474,7 @@ function runAnalyst(c: CaseState): any {
     EARLIER_SPECS: earlierSpecs(id), SPEC_SCHEMA: JSON.stringify(SCHEMA.spec, null, 2),
   }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
   const from = head();
-  let r = track(c, claude({ step: `Case ${id} › Analyst`, prompt: base, cwd: WT, logBase: join(caseDir(id), "analyst"),
+  let r = track(c, claudeResumable({ step: `Case ${id} › Analyst`, prompt: base, cwd: WT, logBase: join(caseDir(id), "analyst"),
     args: analystArgs(c), model: MODELS.analyst, maxTurns: id === 0 || id === 5 ? TURNS.analyst : TURNS.analystBrowser, timeoutMs: TIMEOUT_MS }));
   // One repair attempt for contract errors (resumed, so it keeps its exploration).
   for (let attempt = 1; ; attempt++) {
@@ -496,7 +496,7 @@ function runAnalyst(c: CaseState): any {
     }
     console.warn(`⚠️  Analyst contract errors:\n${errors.map((e) => `  - ${e}`).join("\n")}`);
     if (attempt === 2) { c.analyst = "✗ contract"; failCase(c, `Analyst broke the contract: ${errors.join("; ")}`); }
-    r = track(c, claude({ step: `Case ${id} › Analyst (repair)`, cwd: WT, logBase: join(caseDir(id), "analyst-repair"),
+    r = track(c, claudeResumable({ step: `Case ${id} › Analyst (repair)`, cwd: WT, logBase: join(caseDir(id), "analyst-repair"),
       prompt: `The pipeline rejected your spec. Fix ONLY these contract errors, then end with the STATUS line:\n${errors.map((e) => `- ${e}`).join("\n")}\n\n${SHARED.UNATTENDED}`,
       args: analystArgs(c), model: MODELS.analyst, maxTurns: 20, timeoutMs: TIMEOUT_MS, resumeId: r.sessionId }));
   }
@@ -532,7 +532,7 @@ function review(c: CaseState, round: number, spec: any, caseBase: string, coderS
     CHANGES: changes ? `\n# Changes since the previous test run (judge each one)\n${changes}\n- A test that flipped pass → fail is fine only if it was tightened and now correctly shows a site issue; otherwise it is a HIGH test issue.\n- A removed test is a HIGH test issue unless it was a duplicate or genuinely wrong.\n` : "",
   }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions. Your whole reply is the JSON object.`;
   const logBase = join(caseDir(id), `review-${label}`);
-  const viaClaude = (base: string) => claude({ step: `Case ${id} › Reviewer ${label}`, prompt: p, cwd: WT, logBase: base, args: ROLE_ARGS.reviewer,
+  const viaClaude = (base: string) => claudeResumable({ step: `Case ${id} › Reviewer ${label}`, prompt: p, cwd: WT, logBase: base, args: ROLE_ARGS.reviewer,
     model: REVIEWER === "claude" ? MODELS.reviewer : CLAUDE_REVIEWER_MODEL, maxTurns: TURNS.reviewer, timeoutMs: TIMEOUT_MS, jsonSchema: claudeReviewSchema });
   let r: AgentResult;
   if (REVIEWER === "codex" && !codexUnavailable) {
@@ -579,7 +579,7 @@ function blockingIssues(rv: Review, g: GateResult): Issue[] {
 
 function fixRound(c: CaseState, coderSession: string, label: string, body: string): AgentResult {
   const id = c.def.id;
-  const r = track(c, claude({ step: `Case ${id} › Coder fix ${label}`, cwd: WT, logBase: join(caseDir(id), `coder-fix-${label}`),
+  const r = track(c, claudeResumable({ step: `Case ${id} › Coder fix ${label}`, cwd: WT, logBase: join(caseDir(id), `coder-fix-${label}`),
     prompt: `${body}\nIf you disagree with an issue, don't change the code: explain why. Re-run the tests.\n\n${SHARED.ORACLE}\n\n${SHARED.UNATTENDED}`,
     args: ROLE_ARGS.coder, model: MODELS.coder, maxTurns: TURNS.coder, timeoutMs: TIMEOUT_MS, resumeId: coderSession }));
   if (!commit(WT, `Case ${id}: coder fix ${label}`)) c.notes.push(`Coder fix ${label}: no changes`);
@@ -602,7 +602,7 @@ function runAcceptance(c: CaseState, attempt: number, caseBase: string, g: GateR
     GATE: g.text.slice(0, 6000),
     TOOLS_NOTE: "Tools: read files (Read, Glob, Grep) and `curl` for one read-only re-check of a deviation's evidence. You cannot edit anything. Do not read specs/: judge against the original text.",
   }) + `\n\n${SHARED.ORACLE}\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\nYou run unattended: never ask questions.`;
-  const r = track(c, claude({ step: `Case ${id} › Acceptance ${attempt}`, prompt: p, cwd: WT, logBase: join(caseDir(id), `acceptance-${attempt}`),
+  const r = track(c, claudeResumable({ step: `Case ${id} › Acceptance ${attempt}`, prompt: p, cwd: WT, logBase: join(caseDir(id), `acceptance-${attempt}`),
     args: ROLE_ARGS.acceptance, model: MODELS.acceptance, maxTurns: TURNS.acceptance, timeoutMs: TIMEOUT_MS, jsonSchema: acceptanceJsonSchema }));
   const a = r.structured as Acceptance | undefined;
   if (!a || !validate.acceptance(a)) failCase(c, `Acceptance broke the JSON contract: ${a ? ajvErrors(validate.acceptance) : "no structured output"}`);
@@ -648,7 +648,7 @@ function runCase(c: CaseState) {
   const analystDone = head();
 
   // ② Coder
-  const coder = track(c, claude({ step: `Case ${id} › Coder`, prompt: coderPrompt(c, spec), cwd: WT, logBase: join(caseDir(id), "coder"),
+  const coder = track(c, claudeResumable({ step: `Case ${id} › Coder`, prompt: coderPrompt(c, spec), cwd: WT, logBase: join(caseDir(id), "coder"),
     args: ROLE_ARGS.coder, model: MODELS.coder, maxTurns: TURNS.coder, timeoutMs: TIMEOUT_MS }));
   const changed = commit(WT, `Case ${id}: coder`); // fix 10: commit + measure before reading the status
   let g = gate(c, "after coder", analystDone, false);

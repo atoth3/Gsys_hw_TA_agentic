@@ -662,6 +662,10 @@ The plan was written before any code ran. These are the things the dry runs prov
 - Analyst DONE in 54 turns (so 50 really was too tight), Coder DONE, gate GREEN every round (3 repeats as `performance_glitch_user`, no flakiness; the Analyst measured its ~5 s busy-wait and planned a raised first-wait timeout instead of a sleep).
 - **Ended `needs-human`**, the first real use of that status: after 3 rounds one high issue was left. Step 1.5 should assert that each added product's button shows only "Remove" and no longer "Add to cart". That requirement comes from the *refined* spec, not the original ("add the following items to the cart", which 1.6's badge count and the cart page already prove). It's a judgment call for a human, which is what the status is for.
 
+### Runs 6 and 7 (Case 1 with `MAX_ROUNDS=4`, Adam's choice): both lost to a stalled API request
+- In both, the Analyst explored normally but slowly (about 26–30 browser actions in 20 minutes, against 54 turns in 8.6 minutes in run 5). Then a single request stalled: one `api_retry` event with `error: "unknown"`, then silence until the 30-minute agent timeout killed it. The Claude 5-hour window was at about 80% at the time (resets 10:00), which may explain the slowness. Neither the Coder nor the Reviewer ever ran.
+- **Fix:** agents now run in **15-minute time slices**. A slice that times out is **resumed in the same session** (`claude --resume`, "continue where you left off"), up to 3 times (`AGENT_MAX_RESUMES`), so the agent keeps its work. The partial transcript of a timed-out slice is now audited too (before, a timeout skipped the contamination audit). Tested with a deliberately short slice.
+
 ### Still open
-- Case 1's `needs-human` decision (Adam).
+- Case 1: the run with 4 review rounds is still to do (the `needs-human` result from run 5 is kept on `ai/2026-11-26T05-11-49/case-1-purchase`).
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
