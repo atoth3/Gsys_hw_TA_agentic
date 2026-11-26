@@ -1,0 +1,150 @@
+{
+  "case": 5,
+  "summary": "REST API test against the public JSONPlaceholder service, no browser involved: send one GET request to the /users endpoint of the host named in step 5.2 using the REST API request library that already ships with the pinned @playwright/test 1.39.0 (no new dependency), parse the response body as JSON, log one line per user containing only that user's name and email in the example's `Name | email` form and in response order, and validate that the first user's email address contains '@'.",
+  "preconditions": [
+    "The project is set up as in Case 0: Node 18 or newer, @playwright/test pinned to 1.39.0, the whole suite runnable with `npm test`.",
+    "Outbound HTTPS access to the public JSONPlaceholder host from the local machine and from the CI runner. The endpoint needs no authentication, API key, cookie or header of any kind.",
+    "No browser page is needed for this case; it must nevertheless run as part of the same single `npm test` suite as Cases 0-2."
+  ],
+  "steps": [
+    {
+      "id": "5.1",
+      "original": "Add Rest Api library for the test project",
+      "refined": "The test project can issue HTTP requests from a test without driving a browser, and this case's request is made through that REST API request library. The pinned test framework from Case 0 (@playwright/test 1.39.0) already contains such a library, so the capability is taken from there and no new third-party dependency and no change to the exact version pin or the lockfile is introduced."
+    },
+    {
+      "id": "5.2",
+      "original": "Create and send request:\n\nRequest type: GET\nHost: https://jsonplaceholder.typicode.com\nEndpoint: /users",
+      "refined": "The test builds and sends exactly one request, with method GET, to the /users endpoint of the host given in the step (not the browser base address the earlier cases use), and receives a response. Observed today: HTTP 200 with content-type application/json; charset=utf-8, no redirect, ~40 ms."
+    },
+    {
+      "id": "5.3",
+      "original": "Parse response to Json format",
+      "refined": "The test turns the response body into JSON data in memory (an array of user objects) and uses that parsed data as the source for steps 5.4 and 5.5, rather than working on the raw body text."
+    },
+    {
+      "id": "5.4",
+      "original": "Log only the names and emails from the response data\n\nExample:\n\nLeanne Graham | Sincere@april.biz\nErvin Howell | Shanna@melissa.tv",
+      "refined": "For every user in the parsed data, in the order the response returned them, the test emits one log line that contains only that user's name and email address, joined the way the step's example shows: name, space, vertical bar, space, email. No other field of the response (id, username, address, phone, website, company) appears in the logged output. Observed: 10 users, so 10 lines, the first two being exactly the step's example lines."
+    },
+    {
+      "id": "5.5",
+      "original": "Verify the first email address contains @",
+      "refined": "The test asserts that the email address of the first user in the parsed response data contains the character '@'. Observed today the first user is Leanne Graham with email Sincere@april.biz."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-5.1",
+      "step": "5.1",
+      "text": "This case's HTTP request is made through a REST API request library available to the test project, without adding a new third-party dependency and without changing the dependency versions pinned in Case 0.",
+      "source": "original"
+    },
+    {
+      "id": "AC-5.2",
+      "step": "5.2",
+      "text": "The test sends exactly one request for its data: method GET, to the /users endpoint of the host named in step 5.2, and receives its response.",
+      "source": "original"
+    },
+    {
+      "id": "AC-5.2b",
+      "step": "5.2",
+      "text": "The test asserts that the response to that GET request was successful (status 200). Added: the step only says 'send', but this single status assertion is what makes the parse in 5.3 and the assertion in 5.5 meaningful - without it an outage or an error page surfaces as a confusing parse failure instead of a clear API failure.",
+      "source": "added"
+    },
+    {
+      "id": "AC-5.3",
+      "step": "5.3",
+      "text": "The test parses the response body into JSON data, and that parsed data is what steps 5.4 and 5.5 read the names and emails from.",
+      "source": "original"
+    },
+    {
+      "id": "AC-5.4",
+      "step": "5.4",
+      "text": "The test logs one line per user of the parsed response, in response order, each line containing only that user's name and email joined as in the step's example ('name | email'), and no other response field.",
+      "source": "original"
+    },
+    {
+      "id": "AC-5.5",
+      "step": "5.5",
+      "text": "The test asserts that the email address of the first user in the parsed response data contains '@'.",
+      "source": "original"
+    }
+  ],
+  "observations": [
+    "2026-11-26: GET https://jsonplaceholder.typicode.com/users answers HTTP/2 200, content-type 'application/json; charset=utf-8', body 5645 bytes, 0 redirects, ~40 ms. Repeated requests return a byte-identical body, so the data is stable test input.",
+    "Response headers: server cloudflare, x-powered-by Express, cache-control max-age=43200, cf-cache-status HIT, x-ratelimit-limit 3600000 with x-ratelimit-remaining 3599999 - no practical throttling risk for a test suite.",
+    "The body is a JSON array of exactly 10 objects with ids 1..10 in ascending order.",
+    "Each object has these top-level keys: id, name, username, email, address (street, suite, city, zipcode, geo{lat,lng}), phone, website, company (name, catchPhrase, bs). 'name' and 'email' are flat top-level strings; note that 'company' also has a 'name' key and the object also carries a 'username', so 'the names and emails' means the top-level name/email pair.",
+    "All 10 names and emails, in response order: Leanne Graham | Sincere@april.biz; Ervin Howell | Shanna@melissa.tv; Clementine Bauch | Nathan@yesenia.net; Patricia Lebsack | Julianne.OConner@kory.org; Chelsey Dietrich | Lucio_Hettinger@annie.ca; Mrs. Dennis Schulist | Karley_Dach@jasper.info; Kurtis Weissnat | Telly.Hoeger@billy.biz; Nicholas Runolfsdottir V | Sherwood@rosamond.me; Glenna Reichert | Chaim_McDermott@dana.io; Clementina DuBuque | Rey.Padberg@karina.biz.",
+    "The first two entries of the live response are exactly the two example lines in step 5.4, so the example documents the real data and the required output format ('name | email'), not a sample to invent.",
+    "Every one of the 10 email addresses contains exactly one '@'; the first one, Sincere@april.biz, does, so step 5.5 passes against the live API as written.",
+    "The endpoint is fully public: no authentication, API key, cookie or custom header is needed, and no request body applies to a GET.",
+    "@playwright/test 1.39.0 - the version Case 0 pinned and the only test dependency in package.json - already ships a REST API request library (its request/APIRequestContext facility), so step 5.1 needs no new package and the Case 0 lockfile pin stays untouched.",
+    "The project's playwright.config.ts sets baseURL https://www.saucedemo.com for the browser cases and declares a single project, firefox. This case's host is a different one, so its request must address the host of step 5.2 rather than relying on the project base address.",
+    "This case needs no browser page at all; it only has to run inside the same `npm test` suite as the other cases."
+  ],
+  "ambiguities": [
+    {
+      "question": "5.1 says 'Add Rest Api library' without naming one. Install a third-party HTTP client (axios, supertest, node-fetch) or use what the framework already provides?",
+      "decision": "Use the REST API request library that comes with the pinned @playwright/test 1.39.0. It is a real REST API library, it needs no new dependency, and it keeps Case 0's exact-version pin and lockfile (which the Case 0 criteria check) untouched while the case still runs under the same `npm test`.",
+      "risk": "low"
+    },
+    {
+      "question": "5.2 gives host and endpoint separately. Should the host be the project's configured base address?",
+      "decision": "No. The project base address belongs to the Swag Labs browser cases; this case addresses the host named in step 5.2 for its own request. How that host is supplied is the Coder's choice; what matters is that the GET lands on /users of that host.",
+      "risk": "low"
+    },
+    {
+      "question": "5.2 says only 'create and send'. Should the test assert anything about the response?",
+      "decision": "Assert nothing beyond one successful-status check (AC-5.2b, marked added). Sending is satisfied by sending; no header, timing, schema or count assertions are invented.",
+      "risk": "low"
+    },
+    {
+      "question": "5.4 says 'names and emails' - which keys, given the response also has 'username' and a nested 'company.name'?",
+      "decision": "The top-level 'name' and 'email' of each user object. The step's example lines match the top-level values of the first two users exactly, which settles it.",
+      "risk": "low"
+    },
+    {
+      "question": "What exactly does 'log only' require - a format, a destination, an assertion on the output?",
+      "decision": "One line per user, name and email joined as in the example ('name | email'), nothing else from the response on the line, emitted to the test run's standard output in response order. 'Log' is an action: it is satisfied by producing those lines, so no assertion is made on the logged text.",
+      "risk": "low"
+    },
+    {
+      "question": "5.5 says 'the first email address' - first in the response, first logged, or first alphabetically?",
+      "decision": "The email of the first element of the parsed response array, i.e. the same user whose line is logged first (observed: Sincere@april.biz). The response order is stable across requests (id 1 first), and 5.4 established that order, so 'first' means first as received.",
+      "risk": "low"
+    },
+    {
+      "question": "Should 5.5 be strengthened into a full e-mail format check, or extended to all 10 addresses?",
+      "decision": "No. The step asks for one address and one property: that it contains '@'. Checking more addresses or a stricter pattern would invent requirements.",
+      "risk": "low"
+    },
+    {
+      "question": "Which browser project does an API-only case belong to?",
+      "decision": "It stays in the suite's single existing project (firefox, chosen in Case 0 because 1.39.0's Chromium build crashes on the local machine) so that one `npm test` runs everything, but it opens no page and launches no browser window.",
+      "risk": "low"
+    }
+  ],
+  "deviations": [],
+  "test_data": {
+    "rest_api_library": "the REST API request library bundled with @playwright/test 1.39.0 (the version pinned in Case 0); no new dependency added",
+    "request_method": "GET",
+    "request_host": "the host given in step 5.2 (https://jsonplaceholder.typicode.com)",
+    "request_endpoint": "/users",
+    "expected_status": "200 (observed 2026-11-26)",
+    "expected_content_type": "application/json; charset=utf-8",
+    "response_shape": "JSON array of 10 user objects, ids 1..10 in ascending order",
+    "logged_fields": "each user's top-level name and email only",
+    "log_line_format": "`<name> | <email>` - one line per user, in response order, as in the step's example",
+    "expected_first_two_log_lines": [
+      "Leanne Graham | Sincere@april.biz",
+      "Ervin Howell | Shanna@melissa.tv"
+    ],
+    "first_user_email": "Sincere@april.biz (observed 2026-11-26)",
+    "first_email_assertion": "contains the character '@'",
+    "auth": "none - public endpoint, no key, cookie or custom header",
+    "browser_project": "firefox (the project browser chosen in Case 0); this case opens no page"
+  },
+  "status": "DONE"
+}

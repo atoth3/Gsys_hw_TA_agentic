@@ -1,0 +1,145 @@
+{
+  "case": 3,
+  "summary": "Type one formatted sentence into the CKEditor-powered rich text editor on the public online HTML editor page named in step 3.1 and check the result: the editor starts empty, the test types the text `Automation Test Example` into its main editing area with the keyboard, applies the editor's own bold format to the word `Automation` and the editor's own underline format to the word `Test`, and then validates that the editing area shows exactly the text `Automation Test Example` with those two words carrying those two formats.",
+  "preconditions": [
+    "The project is set up as in Case 0: Node 18 or newer, @playwright/test pinned to 1.39.0, the whole suite runnable with `npm test`, browser project `firefox`.",
+    "Outbound HTTPS access from the local machine and from the CI runner to the public page named in step 3.1. The page is open to anonymous visitors: no account, login, cookie or API key is needed.",
+    "A fresh browser context per run (Playwright's default), so the editor starts empty and the site's cookie-consent banner is shown.",
+    "The editor is a third-party widget created by scripts after the document loads, so the test has to wait for the editing area to be present and editable before typing; the page also loads consent and spell-checker scripts of its own."
+  ],
+  "steps": [
+    {
+      "id": "3.1",
+      "original": "Open the url: https://onlinehtmleditor.dev",
+      "refined": "The test's entry point is the address named in the step, opened directly (it is a different host from the project's configured base address, which belongs to the Swag Labs cases). The page answers as an anonymous visitor with the `Online HTML Editor` page and, once its scripts have run, a rich text editor made of a toolbar and a main editing area. The editing area is empty at that moment: the `Type or paste your content here!` line it displays is the editor's placeholder, not content."
+    },
+    {
+      "id": "3.2",
+      "original": "Type the following text to the editor: Automation Test Example",
+      "refined": "The test puts the caret in the editor's main editing area and enters the text `Automation Test Example` there with the keyboard - the three words in that order, separated by single spaces - rather than pasting it or writing it through the editor's source view. After this step the editor's whole content is that one line of text."
+    },
+    {
+      "id": "3.3",
+      "original": "Automation text should be typed bold format",
+      "refined": "The word `Automation` in that text carries the editor's bold format, applied through the editor's own Bold control (toolbar button or its keyboard shortcut) while the word is being typed or while it is selected, and the test checks that the word really is bold in the editor's content. The two other words and the spaces between the words are left as typed."
+    },
+    {
+      "id": "3.4",
+      "original": "Test text should be typed underline format",
+      "refined": "The word `Test` in that text carries the editor's underline format, applied through the editor's own Underline control (toolbar button or its keyboard shortcut) while the word is being typed or while it is selected, and the test checks that the word really is underlined in the editor's content. `Automation` stays bold and `Example` stays unformatted."
+    },
+    {
+      "id": "3.5",
+      "original": "Validate the text is appearing in the rich text editor",
+      "refined": "The test asserts that the rich text editor's main editing area is visible and that the text it shows is exactly `Automation Test Example` - the text of steps 3.2-3.4 as a reader sees it, with the three words separated by single spaces and nothing else in the editor."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-3.1",
+      "step": "3.1",
+      "text": "The first and only page the test opens is the address named in step 3.1, and the test works on the rich text editor that page provides.",
+      "source": "original"
+    },
+    {
+      "id": "AC-3.2",
+      "step": "3.2",
+      "text": "The test enters the text `Automation Test Example` into the editor's main editing area with the keyboard (not by pasting it or by writing markup through the editor's source view), and that text is the editor's whole content afterwards.",
+      "source": "original"
+    },
+    {
+      "id": "AC-3.3",
+      "step": "3.3",
+      "text": "The word `Automation` in the editor's content is in bold format, applied through the editor's own bold control, and the test asserts that it is bold.",
+      "source": "original"
+    },
+    {
+      "id": "AC-3.4",
+      "step": "3.4",
+      "text": "The word `Test` in the editor's content is in underline format, applied through the editor's own underline control, and the test asserts that it is underlined.",
+      "source": "original"
+    },
+    {
+      "id": "AC-3.5",
+      "step": "3.5",
+      "text": "The test asserts that the rich text editor's main editing area is visible and that the text it shows is exactly `Automation Test Example`.",
+      "source": "original"
+    }
+  ],
+  "observations": [
+    "2026-11-26, explored in the Playwright MCP browser (headless Chrome 158, 1280x720 viewport, fresh profile). The suite itself runs on the project browser Firefox; everything relied on below comes from the editor's own behaviour or the page's CSS, not from a browser-specific API.",
+    "https://onlinehtmleditor.dev answers HTTP 200 at that exact address (no redirect to a different host, no login wall). Page title: `Free online HTML editor - Word to HTML | Onlinehtmleditor.dev`; heading `Online HTML Editor`, `powered by CKEditor`.",
+    "The editor is CKEditor 5 rendered inline in the main document: there is NO iframe anywhere on the page (0 iframes). The editing area is a `contenteditable` region exposed as a textbox with the accessible name `Rich Text Editor. Editing area: main. Press <alt>0 for help.` inside an application region named `Rich Text Editor`.",
+    "The editing area is EMPTY on load: its markup is `<p class=\"ck-placeholder\" data-placeholder=\"Type or paste your content here!\"><br></p>` and its text is empty. The sentence a user sees there is a CSS placeholder drawn from `data-placeholder`, so an exact comparison of the editor's text against the typed sentence is possible and meaningful.",
+    "The editor's toolbar exposes separate buttons named `Bold`, `Italic`, `Underline`, `Strikethrough`, plus `Source`, `Select all`, `Remove Format` and others. The `Bold` and `Underline` buttons are toggles: they carry `aria-pressed` false/true, observed flipping to `true` when the format is on and back to `false` when it is off.",
+    "Their tooltips name keyboard shortcuts as `Bold (Cmd+B)` and `Underline (Cmd+U)` on macOS; on the Linux CI runner the same shortcuts are Ctrl-based, so a shortcut-driven implementation must use the platform-neutral modifier while a toolbar-click implementation is platform-independent.",
+    "Verified working sequence A (type plain first, then format): click the editing area, type `Automation Test Example`, select the word `Automation` and press Bold, select the word `Test` and press Underline. Resulting content: `<p><strong>Automation</strong> <u>Test</u> Example</p>`; the editing area's text is exactly `Automation Test Example` with no stray characters. Computed styles: the `Automation` run has font-weight 700 and text-decoration none, the `Test` run has text-decoration underline and font-weight 400.",
+    "Verified sequence B (toggle formats while typing: Bold on, type `Automation`, Bold off, type space, Underline on, type `Test`, Underline off, type ` Example`) produces the same visible result BUT CKEditor leaves seven zero-width U+2060 WORD JOINER filler characters in the content right after the underlined word: the text reads `Automation Test\\u2060\\u2060\\u2060\\u2060\\u2060\\u2060\\u2060 Example`. The fillers survive blurring the editor, so an exact text comparison fails against them even though the page looks correct. Sequence A avoids them entirely; any implementation that toggles a format off mid-typing has to cope with them.",
+    "Selecting a word works both by double-clicking it inside the editing area and by keyboard (caret to line start, arrow right past the preceding words, then shift+arrow right over the word); both were observed to yield exactly the intended word as the selection.",
+    "A cookie-consent dialog (CookieHub, `Deny all` / `Allow all cookies` / `Cookie settings`) is fixed to the BOTTOM of the viewport, 122 px tall, z-index 700001. It covers the lower part of the editing area but never the toolbar nor the first line of the editing area, and clicking into the editing area and clicking toolbar buttons both worked with the banner left untouched. Dismissing it is therefore optional.",
+    "Hazard at the top of the viewport: the site's own header is `position: sticky; top: 0` with z-index 2000, and CKEditor's toolbar turns into a panel fixed at `top: 0` with z-index 1000 once the page is scrolled past the editor. The site header then completely covers the toolbar and a toolbar click is refused as intercepted (observed: a 30 s click timeout at scrollY 402 with `div.b-header__main ... intercepts pointer events`). Keeping the page at or near the top (where the toolbar sits at y ~ 400, well clear of the 81 px header) makes the toolbar clickable; keyboard shortcuts sidestep the problem altogether.",
+    "The page stores no editor content: after a run, localStorage holds only a `device-id` key and sessionStorage is empty, so a fresh context always starts from the empty editor. Reloading the page clears the typed content.",
+    "The editing area carries `spellcheck=\"false\"`; the bundled WProofreader widget reports `Suggestions: 0` and adds no markup to the typed sentence. No red-squiggle or suggestion overlay interfered.",
+    "No console errors on load or during the whole flow (only warnings, from third-party scripts). No ad iframe, interstitial or modal other than the consent banner appeared."
+  ],
+  "ambiguities": [
+    {
+      "question": "3.3 and 3.4 say the words 'should be typed bold/underline format' without the word validate. Are they just actions, with 3.5 the only assertion?",
+      "decision": "Treat each as an action plus one assertion on its result. Applying a character format has no other observable consequence in the test, so without a check a run that typed plain text would pass a case whose whole subject is rich text formatting; 'should be' states a requirement about the resulting content, and a refined step has to be checkable. One assertion per step, on the named word only - no check that anything else is or is not formatted.",
+      "risk": "low"
+    },
+    {
+      "question": "3.3 names 'Automation text' and 3.4 names 'Test text'. Does 3.4 mean the single word `Test` or the whole typed test text?",
+      "decision": "The single word `Test`. The two steps are parallel and each names one word of the sentence typed in 3.2; reading 3.4 as the whole sentence would also contradict 3.3, which leaves only `Automation` bold. `Example` and the spaces between the words stay unformatted.",
+      "risk": "low"
+    },
+    {
+      "question": "Must the formatting be applied through the editor's UI, or would any content with the right markup do (for example via the Source button or by setting the editor's data)?",
+      "decision": "Through the editor's own Bold and Underline controls (toolbar buttons or their keyboard shortcuts), because 3.2-3.4 all say 'typed'. Which of the two controls, and whether the format is toggled while typing or applied to a selection afterwards, is the Coder's choice.",
+      "risk": "low"
+    },
+    {
+      "question": "3.5 says 'the text is appearing'. Is that a substring check or the editor's whole content?",
+      "decision": "The editing area's whole visible text must equal `Automation Test Example`. The editor is empty before the test types (the visible sentence is a placeholder), so the exact comparison is both available and the honest reading of 'the text is appearing in the rich text editor'. It also catches the stray zero-width fillers that one of the two typing orders leaves behind.",
+      "risk": "low"
+    },
+    {
+      "question": "The project's configured base address is the Swag Labs host used by Cases 1 and 2. Should this case use it?",
+      "decision": "No. This case opens the absolute address named in step 3.1, the same way Case 5 addresses its own host. How that address is supplied is the Coder's choice.",
+      "risk": "low"
+    },
+    {
+      "question": "Should the cookie-consent banner be dismissed first, and should the test assert anything about it?",
+      "decision": "No assertion either way; dismissing is optional. The banner is pinned to the bottom of the viewport and was observed never to cover the toolbar or the first line of the editing area, and the whole flow succeeded with it left in place. Dismissing it is a robustness choice that belongs to the Coder, not a requirement.",
+      "risk": "low"
+    },
+    {
+      "question": "Which browser project does this case run in, given that the exploration above was done in the MCP's headless Chrome?",
+      "decision": "The suite's existing `firefox` project (chosen in Case 0 because Playwright 1.39.0's Chromium build crashes on the local machine), so one `npm test` still runs everything. Nothing in the acceptance criteria depends on a Chrome-specific detail: the markup and the filler characters come from CKEditor itself and the toolbar/header overlap from the page's CSS.",
+      "risk": "medium"
+    },
+    {
+      "question": "How should 'bold' and 'underline' be observed - by the editor's markup, by computed style, or by the toolbar button state?",
+      "decision": "Left to the Coder; the criterion is that the word really carries that format in the editor's content. The observations record all three signals seen today (markup wrapping the exact word, computed font-weight 700 / text-decoration underline, and the toggle buttons' aria-pressed state) so the Coder can pick one that reads well. A toolbar button's pressed state alone is weaker - it reflects the caret, not the content - so it should not be the only evidence.",
+      "risk": "low"
+    }
+  ],
+  "deviations": [],
+  "test_data": {
+    "entry_page": "the address given in step 3.1 (https://onlinehtmleditor.dev), opened directly rather than through the project's base address",
+    "editor": "the page's single rich text editor (CKEditor 5, rendered inline in the main document - no iframe); its main editing area is the textbox named `Rich Text Editor. Editing area: main.`",
+    "initial_editor_content": "empty (the visible `Type or paste your content here!` line is a placeholder attribute, not content)",
+    "text_to_type": "Automation Test Example",
+    "bold_word": "Automation",
+    "underline_word": "Test",
+    "unformatted_word": "Example",
+    "input_method": "keyboard typing into the editing area; formats applied with the editor's own Bold and Underline controls",
+    "expected_editor_text": "Automation Test Example (exact, the editing area's whole visible text)",
+    "observed_editor_markup": "<p><strong>Automation</strong> <u>Test</u> Example</p> (observed 2026-11-26)",
+    "observed_computed_styles": "`Automation` font-weight 700, text-decoration none; `Test` text-decoration underline, font-weight 400",
+    "known_trap": "toggling a format off mid-typing leaves seven zero-width U+2060 word-joiner characters after the underlined word; typing the plain sentence first and formatting the two words afterwards produces clean text",
+    "cookie_banner": "CookieHub consent dialog fixed to the bottom of the viewport; does not block the toolbar or the first line of the editing area, dismissing it is optional",
+    "browser_project": "firefox (the project browser chosen in Case 0)"
+  },
+  "status": "DONE"
+}

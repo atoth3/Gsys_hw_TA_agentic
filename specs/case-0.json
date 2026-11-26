@@ -1,0 +1,144 @@
+{
+  "case": 0,
+  "summary": "Set up the test project so the homework suite can run: Node 18 or newer declared, @playwright/test pinned to exactly 1.39.0 (package.json + lockfile), an `npm test` runner script that runs the whole suite, and a GitHub Actions workflow that runs that script on every pull request to `main` and every push to `main` on a clean runner. Because X1 can only be proven by a CI run that really executes tests, Case 0 also contributes the suite's single smoke test: it opens a real page in the project's browser (Firefox, the only browser build shipped with 1.39.0 that launches on both the local machine and the pinned CI image) and asserts visible content on it.",
+  "preconditions": [
+    "Local machine: macOS 26 on Apple Silicon (arm64), Node v24.15.0; GitHub-hosted Linux runners for CI.",
+    "The repository currently contains only .gitignore, CONVENTIONS.md, README.md and requirements/homework.md: no package.json, no lockfile, no tests, no .github/workflows.",
+    "@playwright/test 1.39.0 is still published on npm and its Firefox 118.0.1 build is still downloadable from Playwright's CDN (see observations).",
+    "No browser automation is needed to produce this spec; setup facts were read from the npm registry, the Playwright repository at tag v1.39.0, nodejs.org and actions/runner-images."
+  ],
+  "steps": [
+    {
+      "id": "0.1",
+      "original": "Nodejs: 18 or newer",
+      "refined": "The project states its Node floor in package.json as \"18 or newer\" (an engines constraint satisfied by 18.x and by every later major), and the suite demonstrably runs on that floor: a CI run executes the full suite on Node 18 as well as on a newer major. Verified by the pipeline's gate reading package.json and by the CI run of X1 (not by a Playwright test: tests must not inspect package.json)."
+    },
+    {
+      "id": "0.2",
+      "original": "Playwright: 1.39.0",
+      "refined": "The test project depends on Playwright Test at exactly version 1.39.0, not a range: package.json names the single version 1.39.0, and the committed lockfile resolves it to 1.39.0, so a clean install reproduces that version. Verified by the pipeline's gate, which checks the exact pin in package.json and in the lockfile."
+    },
+    {
+      "id": "0.3",
+      "original": "Create test runner script in package.json",
+      "refined": "package.json defines a test runner script invoked as `npm test` that runs the whole Playwright suite (every spec file, no filtering to a case, browser or tag), so adding a later case's spec needs no change to the script. Verified by the pipeline's gate, which checks that an `npm test` script exists and that it runs the suite."
+    },
+    {
+      "id": "X1",
+      "original": "The tests run in CI on GitHub Actions: every pull request to `main` and every push to `main` runs the full suite on a clean runner, using the test runner script from 0.3.",
+      "refined": "A GitHub Actions workflow is triggered by pull requests targeting `main` and by pushes to `main`; on each trigger it starts from a clean runner, installs the dependencies from the committed lockfile and the browser build belonging to the pinned Playwright version, and runs the full suite through the 0.3 runner script (`npm test`), failing the run when any test fails. The runner image is one for which Playwright 1.39.0 publishes browser builds and dependency lists. Verified by `actionlint` in the pipeline's gate and, decisively, by the CI run itself."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-0.1a",
+      "step": "0.1",
+      "text": "package.json declares a Node version requirement of 18 or newer.",
+      "source": "original"
+    },
+    {
+      "id": "AC-0.1b",
+      "step": "0.1",
+      "text": "The full suite runs in CI on Node 18 (the lowest version the step allows) and on a newer supported major, and passes on both.",
+      "source": "original"
+    },
+    {
+      "id": "AC-0.2a",
+      "step": "0.2",
+      "text": "package.json requires Playwright Test at exactly 1.39.0, expressed as that single version rather than a range.",
+      "source": "original"
+    },
+    {
+      "id": "AC-0.2b",
+      "step": "0.2",
+      "text": "The committed lockfile resolves Playwright Test to 1.39.0, so a clean install of the project yields that exact version.",
+      "source": "original"
+    },
+    {
+      "id": "AC-0.3",
+      "step": "0.3",
+      "text": "package.json defines a test runner script that `npm test` invokes, and running it executes the entire Playwright suite rather than a selected subset.",
+      "source": "original"
+    },
+    {
+      "id": "AC-X1a",
+      "step": "X1",
+      "text": "A GitHub Actions workflow is configured to run on pull requests targeting `main` and on pushes to `main`, and in both cases it runs the full suite through the 0.3 test runner script.",
+      "source": "original"
+    },
+    {
+      "id": "AC-X1b",
+      "step": "X1",
+      "text": "The workflow prepares everything it needs on a clean runner (dependencies installed from the committed lockfile, browser build of the pinned Playwright version) and a real run of it completes with the suite passing; a failing test fails the run.",
+      "source": "original"
+    },
+    {
+      "id": "AC-X1c",
+      "step": "X1",
+      "text": "The suite contains at least one test that launches the project's browser, opens a real web page and asserts visible content on it. Added because X1 is only provable by a CI run that actually executes tests: Case 0 is merged before any other case, so without such a test the suite would be empty and a green CI run would prove nothing about the browser install.",
+      "source": "added"
+    }
+  ],
+  "observations": [
+    "`npm view @playwright/test@1.39.0 version engines` (2026-11-26) → version \"1.39.0\", engines.node \">=16\". So the package itself allows Node 16; the Node 18 floor comes from step 0.1, not from Playwright.",
+    "`npm view @playwright/test versions` lists 1.39.0 as published, alongside current releases up to 1.65.1 (plus 1.66.0 alphas dated 2026-11-26): pinning 1.39.0 means deliberately installing a ~3-year-old release, which is what 0.2 asks for.",
+    "playwright-core browsers.json at tag v1.39.0: chromium 119.0.6045.9 (revision 1084), firefox 118.0.1 (revision 1425), webkit 17.4 (revision 1921) are the installByDefault builds.",
+    "The pipeline measured on this machine (macOS 26, arm64) with 1.39.0: Chromium (build 1084) crashes at launch with SEGV_ACCERR headless and headed; Firefox 118.0.1 and WebKit 17.4 launch and work.",
+    "Playwright v1.39.0 nativeDeps (packages/playwright-core/src/server/registry/nativeDeps.ts) defines dependency lists only for ubuntu18.04, ubuntu20.04, ubuntu22.04, debian11, debian12 and their arm64 variants: nothing newer than Ubuntu 22.04.",
+    "actions/runner-images README on 2026-11-26: `ubuntu-latest` now resolves to Ubuntu 26.04; the explicit labels `ubuntu-24.04` and `ubuntu-22.04` (x64 and arm64) are still offered.",
+    "The Firefox 118.0.1 Linux build for the 22.04 image is still downloadable: a HEAD request for revision 1425's firefox-ubuntu-22.04.zip on Playwright's legacy CDN host returns 307 to playwright.download.prss.microsoft.com and then HTTP 200 with content-length 84692530 (last-modified 2025-11-25).",
+    "nodejs.org/dist/index.json (2026-11-26): Node 18's final release 18.20.8 is still published and downloadable, so a CI matrix entry for 18 can still be provisioned.",
+    "nodejs Release schedule.json: v18 end 2025-04-30, v20 end 2026-04-30, v22 end 2027-04-30, v24 end 2028-04-30. Both 18 and 20 are past end-of-life today; the requirement nonetheless names 18 as the floor.",
+    "`https://www.saucedemo.com/` returns HTTP 200 with `<title>Swag Labs</title>` and the text \"Swag Labs\" on the page: a stable, homework-owned page (Cases 1 and 2 use the same host) suitable for the smoke test.",
+    "The repository holds no package.json, lockfile, playwright.config, tests directory or workflow yet: everything in this case is created from scratch."
+  ],
+  "ambiguities": [
+    {
+      "question": "Which browser should the project run, given that the 1.39.0 Chromium build cannot launch on the local machine and the local gate must pass before anything merges?",
+      "decision": "One browser project: Firefox (118.0.1, the build shipped with 1.39.0), used identically locally and in CI. Chromium is excluded because it crashes at launch locally, so no Chromium test could ever pass the gate; WebKit works locally but adds nothing for this homework, and a single browser keeps local and CI results identical. All later cases therefore target Firefox.",
+      "risk": "low"
+    },
+    {
+      "question": "Which GitHub runner image should CI use, since `ubuntu-latest` is Ubuntu 26.04 today?",
+      "decision": "Pin the runner to `ubuntu-22.04`, the newest image for which Playwright 1.39.0 publishes both a browser build and a dependency list; on 24.04 or 26.04 the browser-dependency install has no entry for the distribution. The label is still offered by GitHub today.",
+      "risk": "medium"
+    },
+    {
+      "question": "\"Nodejs: 18 or newer\" — which Node versions should be declared and exercised, given that 18 and 20 are both past end-of-life on 2026-11-26?",
+      "decision": "Declare the floor as 18 or newer and keep CI exercising 18 (the stated floor, still installable as 18.20.8) plus a newer major, as the project conventions require. The requirement's strength is a lower bound, so proving the suite runs on the lowest allowed version is the honest check; end-of-life status is not a reason to raise the floor the homework names.",
+      "risk": "low"
+    },
+    {
+      "question": "What exactly is a \"test runner script\" (0.3), and how does X1's \"full suite\" relate to it?",
+      "decision": "A single `npm test` script that runs the whole Playwright suite with no case, browser or tag filter, and the CI job invokes exactly that script. This way X1's \"full suite\" and 0.3's script are the same thing by construction, and later cases are picked up without touching either.",
+      "risk": "low"
+    },
+    {
+      "question": "Does \"Playwright: 1.39.0\" mean at least 1.39.0 or exactly 1.39.0?",
+      "decision": "Exactly 1.39.0, pinned without a range in package.json and resolved to 1.39.0 in the lockfile. The step names one version, and a range would silently install a different one on a clean runner, contradicting the precondition that the gate checks.",
+      "risk": "low"
+    },
+    {
+      "question": "Case 0 has no behaviour of its own to test, yet X1 requires a CI run of the suite. What does that run execute, and which page should it open?",
+      "decision": "Exactly one smoke test, which opens the Swag Labs login page (saucedemo.com, the host Cases 1 and 2 already use) in Firefox and asserts the visible \"Swag Labs\" branding. One real page load in the real browser is the smallest thing that proves the install works; reusing the homework's own host avoids introducing a site no requirement mentions.",
+      "risk": "low"
+    },
+    {
+      "question": "Should a Playwright test assert the Node version, the Playwright pin or the workflow contents?",
+      "decision": "No. These are verified by the pipeline's gate (pin check, `npm test` check, `tsc`, `actionlint`) and by the CI run; a test that parses package.json or workflow YAML would re-implement a linter and prove nothing about the running environment.",
+      "risk": "low"
+    }
+  ],
+  "deviations": [],
+  "test_data": {
+    "node_requirement": "18 or newer (floor from step 0.1)",
+    "ci_node_versions": ["18", "20"],
+    "playwright_version": "1.39.0 (exact pin, package.json + lockfile)",
+    "test_runner_invocation": "npm test (runs the whole Playwright suite)",
+    "browser_project": "firefox (Firefox 118.0.1, the build bundled with Playwright 1.39.0)",
+    "ci_runner_image": "ubuntu-22.04",
+    "smoke_page": "https://www.saucedemo.com/ (Swag Labs login page, same host as Cases 1 and 2)",
+    "smoke_expected_visible_text": "Swag Labs"
+  },
+  "status": "DONE"
+}
