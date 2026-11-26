@@ -555,7 +555,7 @@ The **Coder in Case 0**, from requirement X1, like any other code. The Reviewer 
 ### What the workflow must do (checklist, not code)
 - **Triggers:** `pull_request` to `main` (every case PR), `push` to `main` (re-checks the merged result), `workflow_dispatch`.
 - **Least privilege:** `permissions: contents: read`. No secrets needed: the credentials are public demo values and `credential.json` is committed, as the homework asks.
-- **Concurrency:** one run per branch, cancelling in-progress runs **only for PRs**. Push and nightly runs on `main` are never cancelled, because the merge rule uses them as its baseline.
+- **Concurrency:** one group per PR, cancelling in-progress runs **only for PRs**. Push and nightly runs on `main` are never cancelled **or replaced**, because the merge rule uses them as its baseline. **Corrected after dry run 2** (Codex found it): a concurrency group holds only *one pending* run, so the original per-branch group (`github.ref`) would let a third push to `main` silently drop the queued second push run, even with `cancel-in-progress: false`. Non-PR runs therefore get a unique group (`github.run_id`).
 - **Node:** matrix over `18` (the homework's minimum) and `20`, via `actions/setup-node` with npm cache.
 - **Install:** `npm ci`, then `npx playwright install --with-deps` using the **1.39.0** version from the lockfile. Don't use `@latest`, or the browsers won't match the pinned Playwright.
 - **Run:** the `npm test` script required by the preconditions, so CI also verifies that the runner script works.
@@ -577,7 +577,7 @@ on:
   schedule: [{ cron: "0 5 * * *" }]   # nightly site-drift check (decision 12)
 permissions: { contents: read }
 concurrency:
-  group: "${{ github.workflow }}-${{ github.ref }}"
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"  # PRs share a group; other runs never queue behind each other
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # never cancel main's baseline runs
 jobs:
   test:
@@ -603,6 +603,7 @@ jobs:
 
 ### Case 0 needs something to run
 A PR with zero tests makes `playwright test` fail with "no tests found". Case 0 therefore includes one **smoke test** (for example: the saucedemo login page loads). This also proves the workflow before any real case lands.
+**The smoke test opens a real page; it does not test the setup.** Steps 0.1–0.3 and X1 are verified by the gate (pin check, `npm test` script check, `tsc`, `actionlint`) and by the CI run itself, not by Playwright tests that parse `package.json` or workflow YAML (lesson from dry run 2, section 14).
 
 ### How CI feeds back into the pipeline
 With `--merge`, after each case PR is opened:
@@ -618,3 +619,26 @@ The tests hit **live third-party sites** that change without notice: the footer 
 ### What CI deliberately does *not* do
 - It doesn't run the agents. The agentic pipeline stays local (it needs your Claude/Codex logins); CI only runs the resulting tests.
 - It doesn't merge anything. Merging is done by the orchestrator, which has all four gate results; CI knows only one of them.
+
+---
+
+## 14. Dry-run log (build step 4: Case 0 + 5, local mode)
+
+The plan was written before any code ran. These are the things the dry runs proved wrong or missing. The fixes are already folded into the sections above; this is the record of *why*.
+
+### Run 1 (`2026-11-25T21-10-25`): stopped by hand during the first review
+- **Playwright 1.39.0's Chromium (build 1084, Chromium 119) crashes at launch on macOS 26** (`SEGV_ACCERR`, headless and headed). Firefox 118 and WebKit 17.4 from the same version work. The Coder found it, refused to weaken the test, and reported it, which was the right behaviour. No fix round could solve it, so the run was stopped.
+  **Decision (Adam):** keep `1.39.0`; it is fulfillable (Firefox/WebKit locally, all browsers on `ubuntu-22.04`), so it is *not* a requirement deviation. The pipeline now gives every agent an **Environment facts** block (`prompts/shared.md`) with the measured browser behaviour and lets the agents choose the browser and record why. In run 2 the Analyst chose Firefox for local and CI.
+- **Ctrl+C wrote no report.** `tsx`/`npm` forward the terminal's SIGINT, so one Ctrl+C arrived 2–3 times and hit the "second Ctrl+C = exit now" path. Fixed: repeats within 2 s are ignored.
+- Turn budgets were too tight (Coder used 79 of 80). The Analyst lost turns to permission denials for `node -v` and compound shell commands.
+
+### Run 2 (`2026-11-25T21-34-20`): Case 0 failed after 3 review rounds, Case 5 not run
+- Analyst, Coder and gate all worked (gate GREEN every round, 16 min total). The contracts, ajv validation, path guard, README skeleton, report and manifest all behaved as designed; `cleanup.ts` removed run 1 by its manifest.
+- **Failure: a reviewer arms race on X1.** The Analyst decided that X1 ("tests run in CI") should be asserted by the smoke test, which regex-checked the workflow YAML. Codex (correctly, in a narrow sense) proved each round, by mutating the YAML in memory, that the test missed yet another bad edit (`if: false`, `paths:` filters, a removed install step). Each fix produced 2–4 new "high" issues; the round budget ran out. This is Step 7's "critic is never happy" again, in a new form.
+  **Root cause in the plan:** it never said *how* setup/CI requirements are verified, so the Analyst invented "a test that parses config". **Fix:** 0.x and X1 are verified by the gate (pin, `npm test` script, `tsc`, `actionlint`) and by the CI run; no Playwright tests that parse `package.json` or YAML (`CONVENTIONS.md`, Analyst Case 0 note, section 13). Reviewer prompt: a high issue is a defect *in the current files*; "a future edit wouldn't be caught" is not one, and it must not mutate files to hunt for missing checks.
+- **One real finding adopted:** the concurrency group from section 13 could drop a queued push run on `main` (see section 13, Concurrency).
+- **Codex on a free ChatGPT plan** kept up for 3 reviews (about 35 s each). The orchestrator now falls back to a Claude reviewer if Codex fails, and records that in the report.
+
+### Still open
+- `actionlint` is not installed on this machine (`brew install actionlint`); until then the gate only warns, which weakens the X1 check.
+- The Analyst runs headless with a narrow shell allow-list; compound commands are denied. Acceptable for now, revisit when the browser (build step 5) is added.

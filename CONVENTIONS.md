@@ -6,7 +6,8 @@ Binding for the Coder, checked by the Reviewer. "Must" rules are high-severity w
 
 - Must: Playwright Test (`@playwright/test`) pinned to exactly `1.39.0` (no `^` or `~`), in `package.json` and the lockfile.
 - Must: an `npm test` script runs the whole suite (`playwright test`).
-- Must: one spec file per case: `tests/case-<N>-<slug>.spec.ts`. Case 0 has a single smoke test, so CI always has something to run.
+- Must: one spec file per case: `tests/case-<N>-<slug>.spec.ts`. Case 0 has a single smoke test, so CI always has something to run: it opens a real page in the project's browser and asserts something visible on it, so a CI run proves the browser install works.
+- Setup and CI requirements (Node version, Playwright pin, the `npm test` script, the workflow) are verified by the pipeline's gate (pin check, `npm test` script check, `actionlint`) and by the CI run itself, **not** by Playwright tests. Don't write tests that parse `package.json`, the lockfile or workflow YAML: such a test re-implements a linter, and it can never catch every bad edit.
 - Page objects in `pages/` (one class per page or component), shared helpers in `utils/`, test data in `test/resources/`.
 - `tsconfig.json` must `include` only the test project (`tests/`, `pages/`, `utils/`, `playwright.config.ts`, …). It must not include `pipeline/`, which is a separate package with its own dependencies.
 - `playwright.config.ts`: `testDir: 'tests'`; reporter settings per the CI checklist below.
@@ -35,7 +36,7 @@ Some sites block data-centre IPs (GitHub Actions runners) with bot protection. W
 
 - Triggers: `pull_request` to `main`, `push` to `main`, `workflow_dispatch`, and a nightly `schedule`.
 - `permissions: contents: read`; no secrets.
-- `concurrency` per branch; cancel in-progress runs only for pull requests.
+- `concurrency`: pull requests share one group per PR and cancel their in-progress runs; push, nightly and manual runs must never cancel or replace each other (a concurrency group keeps only ONE pending run, so a shared group for pushes to `main` would silently drop a queued push run). For example `group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}` with `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`.
 - Node matrix `18` and `20` via `actions/setup-node` with npm cache; `fail-fast: false`.
 - `npm ci`, then `npx playwright install --with-deps` (the version from the lockfile, never `@latest`), then `npm test`.
 - `playwright.config.ts` with `process.env.CI`: `forbidOnly: true`, `retries: 1`, `trace: 'on-first-retry'`, reporters `github` + `html` + `json` (to `test-results/results.json`).

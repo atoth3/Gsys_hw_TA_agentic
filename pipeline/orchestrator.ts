@@ -402,7 +402,8 @@ function track(c: CaseState, r: AgentResult) {
 }
 
 function analystToolsNote(id: number) {
-  if (id === 0) return "No browser for this case. Shell: `curl` (for documentation pages), `npm view <package>` (published versions, engines), `mkdir`, `date`.";
+  if (id === 0) return "No browser for this case. Shell: `curl` (for documentation pages), `npm view <package>` (published versions, engines), `mkdir`, `date`.\n" +
+    "How Case 0 is verified (fixed by the pipeline, so plan your refined steps around it): the pipeline's gate checks the exact Playwright pin in package.json and the lockfile, that an `npm test` script exists and runs the suite, `tsc`, and lints the workflow with `actionlint`; the CI run itself proves X1. Playwright tests must NOT parse package.json or workflow YAML. The single smoke test opens a real page in the chosen browser. For each 0.x / X1 step, say in `refined` which of these verifies it.";
   if (id === 5) return "No browser for this case: it is an HTTP API, explore it with `curl`. Shell: `curl`, `mkdir`, `date`.";
   return "No browser yet (pipeline build step 5 adds one): use `curl` to fetch pages. Shell: `curl`, `mkdir`, `date`.";
 }

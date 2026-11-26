@@ -14,6 +14,8 @@ Severity for `test` issues:
 - medium = a real but non-essential gap.
 - low = style, naming, nice-to-have.
 
+Judge the code and configuration AS THEY ARE. A high issue is a defect you can show in the current files: a wrong assertion, a test that passes while the requirement is not met by the current code, a workflow that does not do what is required. "If someone later edited the file to X, this test would not notice" is NOT an issue, unless the requirement itself asks for that guard. Do not mutate files (even in memory) to hunt for checks a test fails to make. Setup and CI requirements are verified by the gate and by CI, not by tests (see the conventions): review the workflow/config files themselves.
+
 Then decide `ship`: would you merge this as it is? Medium/low issues alone are not a reason to say no.
 Requirement deviations listed in README "Requirement deviations" are allowed: check that the code implements the AMENDED step and nothing weaker.
 
