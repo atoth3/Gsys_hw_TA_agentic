@@ -33,7 +33,7 @@ const MODELS = {
   reviewer: process.env.REVIEWER_MODEL, // undefined = the CLI's default
 };
 const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MIN ?? 30) * 60_000;
-const TURNS = { analyst: 50, coder: 120, acceptance: 40, reviewer: 40 }; // dry run 1: Case 0 coder used 79 of 80
+const TURNS = { analyst: 50, analystBrowser: 150, coder: 120, acceptance: 40, reviewer: 40 }; // dry run 1: Case 0 coder used 79 of 80; run 4: browser Analyst hit 50
 
 const PIPE = import.meta.dirname;
 const CHECKOUT = resolve(PIPE, "..");
@@ -475,7 +475,7 @@ function runAnalyst(c: CaseState): any {
   }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
   const from = head();
   let r = track(c, claude({ step: `Case ${id} › Analyst`, prompt: base, cwd: WT, logBase: join(caseDir(id), "analyst"),
-    args: analystArgs(c), model: MODELS.analyst, maxTurns: TURNS.analyst, timeoutMs: TIMEOUT_MS }));
+    args: analystArgs(c), model: MODELS.analyst, maxTurns: id === 0 || id === 5 ? TURNS.analyst : TURNS.analystBrowser, timeoutMs: TIMEOUT_MS }));
   // One repair attempt for contract errors (resumed, so it keeps its exploration).
   for (let attempt = 1; ; attempt++) {
     commit(WT, `Case ${id}: analyst spec${attempt > 1 ? ` (repair ${attempt - 1})` : ""}`);
@@ -778,7 +778,10 @@ try {
       c.status = e instanceof NeedsHuman ? "needs-human" : "failed";
       c.failReason ??= (e as Error).message;
       console.error(`${c.status === "needs-human" ? "✋" : "❌"} Case ${c.def.id} ${c.status}: ${c.failReason}`);
+      // Keep what the failed agent left (for inspection) on the case branch, so none of it leaks into the next case.
+      if (shTry("git", ["rev-parse", "--abbrev-ref", "HEAD"], WT).out.trim() === c.branch) commit(WT, `Case ${c.def.id}: work left at failure (${c.status})`);
       shTry("git", ["switch", "-q", "-f", INTEGRATION], WT); // next case starts from integration without it
+      shTry("git", ["clean", "-fdq"], WT); // untracked leftovers (gitignored files like node_modules stay)
       writeManifest();
       writeReport("running");
       if (c.def.id === 0) {
