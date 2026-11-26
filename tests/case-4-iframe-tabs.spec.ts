@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { Guru99HomePage } from '../pages/Guru99HomePage';
 import { SeleniumTutorialPage } from '../pages/SeleniumTutorialPage';
+import { isBotChallenge } from '../utils/botProtection';
 
 test('Case 4: iFrame and tab handling', async ({ page }) => {
   const homePage = new Guru99HomePage(page);
@@ -16,6 +17,7 @@ test('Case 4: iFrame and tab handling', async ({ page }) => {
   });
 
   await test.step('4.3 verify the new tab title (amended, D-4.3)', async () => {
+    test.skip(await isBotChallenge(newTab), 'CI-LIMIT-4: www.guru99.com blocked by bot protection, see README');
     await expect(newTab).toHaveTitle('Selenium Live Project for Practice');
   });
 

@@ -12,7 +12,7 @@ npx playwright install firefox
 npm test
 ```
 
-The suite runs on a single browser project, Firefox: Playwright 1.39.0's Chromium build crashes at launch on Apple Silicon macOS, so Firefox (118.0.1, the build bundled with 1.39.0) is the browser that works identically on the local dev machine and on CI's `ubuntu-22.04` runner.
+All browser tests run on Firefox (one Playwright project per site, each with its own `baseURL`; Case 5 uses an `api` project): Playwright 1.39.0's Chromium build crashes at launch on Apple Silicon macOS, so Firefox (118.0.1, the build bundled with 1.39.0) is the browser that works identically on the local dev machine and on CI's `ubuntu-22.04` runner.
 
 CI (`.github/workflows/playwright.yml`) runs the same `npm test` script on every pull request to `main`, every push to `main`, on a nightly schedule, and on manual dispatch, against Node 18 and 20 on `ubuntu-22.04`.
 
@@ -85,7 +85,21 @@ _None._
 _None._
 
 ### Case 4
-_None._
+**CI-LIMIT-4: www.guru99.com blocks GitHub Actions runners**
+- **Symptom:** the new tab opened in step 4.2 shows Cloudflare's challenge page ("Attention Required! | Cloudflare") instead of the article, so step 4.3 fails in CI only. demo.guru99.com itself is reachable.
+- **Handling:** `utils/botProtection.ts` checks the new tab for the exact challenge-page titles; only then does the test skip with the reason `CI-LIMIT-4`. On days the runner gets through, the test runs in full. No attempt is made to get around the protection.
+- **Evidence:** CI run [45826034004](https://github.com/atoth3/Gsys_hw_TA_agentic/actions/runs/45826034004); log excerpt in [`docs/evidence/case-4/ci-block.md`](docs/evidence/case-4/ci-block.md).
+- **Still verified:** the test passes in full locally.
 
 ### Case 5
 _None._
+
+## How this was built
+
+The tests were written by a local multi-agent pipeline, not by hand, and reviewed by a human before submission. The full design and every lesson from 16+ runs are in [`PLAN.md`](PLAN.md); the pipeline code is in [`pipeline/`](pipeline/).
+
+- **Per case:** an **Analyst** (Claude Opus, with a browser) explores the live site and turns the original requirement into a spec, including documented deviations where a step can't be fulfilled as written. A **Coder** (Claude Sonnet) implements it. A deterministic **gate** runs `tsc`, the tests 3× (flaky = failed), the full suite, and checks (exact Playwright pin, no hard-coded hosts, spec ↔ README deviations). A **Reviewer** (Codex, a different model) and the Coder loop until it ships. A fresh **Acceptance** check compares the code with the *original* text, not the spec.
+- **The orchestrator is plain TypeScript, not an agent:** everything that decides pass/fail is deterministic.
+- **What the human did:** decided the open questions (Playwright 1.39.0 kept; built-in `request` client for Case 5), added the CI-LIMIT-4 runtime skip after the first CI run, and reviewed the result.
+- **Biggest lesson:** the first versions produced tests about 3× larger than needed (every requirement re-asserted, `test.step` everywhere, hosts hard-coded). Proportionality rules plus deterministic checks (rather than more prompting) brought the final code to the size of a hand-written solution.
+- `test/resources/credential.json` lives in `test/` because step 1.2 names that folder; the specs are in Playwright's usual `tests/`.

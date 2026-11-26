@@ -747,7 +747,13 @@ Run 16 (Case 0) → `2026-11-26T11-43-29` (Cases 1, 2, 5; 29 min) → `2026-11-2
 - The **host check** fired three times (Cases 3, 4, 5); each time the Coder moved the host into a config project in one quick round. Prompts alone hadn't achieved that.
 - **For the human review:** D-4.6 substitutes a different button for the removed "Join Now" (Acceptance accepted it as the smallest change); `test/` (credential.json, literally required by step 1.2) next to `tests/`; `test.step` still used.
 
-### Still open
-- Push the result and run CI on GitHub once (Cloudflare on guru99 is expected to show up there, section 4c).
-- Human review, then a short "How this was built" write-up.
+### Publishing (2026-11-26)
+- PR #1 (pipeline) and PR #2 (solution) merged into `main` by hand, on Adam's call; the `--merge` mode (build step 7) was not built.
+- **First CI run (PR #2): 5 passed, 1 failed, exactly the prediction of section 4c.** www.guru99.com (the new tab in Case 4) served "Attention Required! | Cloudflare" to the runners; demo.guru99.com and all other sites were fine.
+- Handled by hand, as section 4c designed it: `utils/botProtection.ts` matches the exact challenge titles and the test skips with `CI-LIMIT-4` only when the block page is there; README "CI limitations" entry with the run link; evidence in `docs/evidence/case-4/ci-block.md`. Locally the test still runs in full.
+- README gained a "How this was built" section.
+
+### Not done (known limitations)
+- `--merge` automation with the CI wait (build step 7) and the evaluation write-up (step 8).
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
+- `test.step` is still used and the Reviewer still asks for a page object even for one-line checks; acceptable.
