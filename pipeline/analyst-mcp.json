@@ -8,7 +8,6 @@
         "--browser", "chrome",
         "--headless",
         "--isolated",
-        "--allowed-origins", "{{ORIGINS}}",
         "--output-dir", "{{OUTPUT_DIR}}"
       ]
     }

@@ -411,12 +411,13 @@ function analystToolsNote(id: number) {
   if (id === 0) return "No browser for this case. Shell: `curl` (for documentation pages), `npm view <package>` (published versions, engines), `mkdir`, `date`.\n" +
     "How Case 0 is verified (fixed by the pipeline, so plan your refined steps around it): the pipeline's gate checks the exact Playwright pin in package.json and the lockfile, that an `npm test` script exists and runs the suite, `tsc`, and lints the workflow with `actionlint`; the CI run itself proves X1. Playwright tests must NOT parse package.json or workflow YAML. The single smoke test opens a real page in the chosen browser. For each 0.x / X1 step, say in `refined` which of these verifies it.";
   if (id === 5) return "No browser for this case: it is an HTTP API, explore it with `curl`. Shell: `curl`, `mkdir`, `date`.";
-  return `Browser: the Playwright MCP tools (\`mcp__playwright__*\`) drive a real, headless Chrome with a fresh in-memory profile. Requests are limited to the case site's origins (${caseOrigins(HOMEWORK.get(id)!).join(", ")}). Explore the page the way a user would: navigate, read the accessibility snapshot, click, type, wait.
+  return `Browser: the Playwright MCP tools (\`mcp__playwright__*\`) drive a real, headless Chrome with a fresh in-memory profile. Stay on the case site (${caseOrigins(HOMEWORK.get(id)!).join(", ")}): the page may load third-party content (ads, consent banners, editor scripts, iframes), which you should observe because the tests will meet it too, but don't browse elsewhere. Explore the page the way a user would: navigate, read the accessibility snapshot, click, type, wait.
 Evidence: save screenshots with an EXPLICIT file name under \`docs/evidence/case-${id}/\` (for example \`docs/evidence/case-${id}/footer.png\`); keep them few and small. Shell: \`curl\`, \`mkdir\`, \`date\`.`;
 }
 
-// ① Analyst browser (build step 5): Playwright MCP for the Analyst only, one config per case with that case's origins.
-// --allowed-origins is NOT a security boundary (the MCP docs say so): it keeps exploration on the case site.
+// ① Analyst browser (build step 5): Playwright MCP for the Analyst only, one config per case.
+// No --allowed-origins (dropped before build step 6): it is NOT a security boundary (the MCP docs say so), and it
+// blocked the third-party ads/consent iframes (guru99) and CDN-loaded editors (onlinehtmleditor) the tests will meet.
 // The file:// guard is the MCP server's default restriction on files outside its workspace, plus DENY + the audit.
 function caseOrigins(def: CaseDef): string[] {
   const origins = new Set<string>();
@@ -433,7 +434,7 @@ function analystArgs(c: CaseState): string[] {
   const outDir = join(caseDir(id), "mcp-output");
   mkdirSync(outDir, { recursive: true });
   const cfg = readFileSync(join(PIPE, "analyst-mcp.json"), "utf8")
-    .replace("{{ORIGINS}}", caseOrigins(c.def).join(";")).replace("{{OUTPUT_DIR}}", outDir);
+    .replace("{{OUTPUT_DIR}}", outDir);
   const file = join(caseDir(id), "analyst-mcp.json");
   writeFileSync(file, cfg);
   const args = [...ROLE_ARGS.analyst];

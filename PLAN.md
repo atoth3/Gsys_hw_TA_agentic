@@ -673,6 +673,9 @@ The plan was written before any code ran. These are the things the dry runs prov
 - 23 min, 159 turns, 0 flaky, not contaminated, no stall. Analyst 9 min, Coder 7.7 min, gate GREEN every round (3 repeats as `performance_glitch_user`). Review converged 4 → 2 → 0 high issues in 3 rounds, inside the 4-round budget; Acceptance ACCEPT at full original strength, no deviations.
 - **Result so far:** `ai/2026-11-26T09-00-38/integration` (local only) holds Cases 0, 1, 2 and 5, each squash-merged after passing every local gate. Superseded run branches (runs 3, 4, 5) are still there; `cleanup.ts <stamp>` removes them.
 
+### Before build step 6: Analyst origin limit dropped
+- `--allowed-origins` is gone from `analyst-mcp.json`. It isn't a security boundary (MCP docs), and for Cases 3–4 it would distort what the Analyst sees: guru99's ad/consent iframes would be blocked, and a CDN-loaded editor might not load at all. The tests will meet those, so the Analyst must too. The `file://` guard (MCP default), the deny rules and the audit stay; the prompt asks the Analyst to stay on the case site.
+
 ### Still open
-- Build step 6: Cases 3–4 (onlinehtmleditor.dev, guru99). Open question from build step 5: the origin limit hides guru99's ad/consent iframes from the Analyst.
+- Build step 6: Cases 3–4 (onlinehtmleditor.dev, guru99).
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
