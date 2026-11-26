@@ -792,8 +792,10 @@ try {
       }
     }
   }
-  const failed = cases.filter((c) => c.status !== "merged");
-  finish(failed.length ? `completed with ${failed.length} failed case(s)` : "completed: all cases merged", failed.length ? 1 : 0);
+  const failed = cases.filter((c) => c.status === "failed").length;
+  const human = cases.filter((c) => c.status === "needs-human").length;
+  const parts = [failed && `${failed} failed`, human && `${human} waiting for your call`].filter(Boolean).join(", ");
+  finish(parts ? `completed: ${parts}` : "completed: all cases merged", parts ? 1 : 0);
 } catch (e) {
   if (e instanceof Interrupted) {
     if (current) { current.status = "interrupted"; current.failReason = "Ctrl+C"; }

@@ -648,6 +648,20 @@ The plan was written before any code ran. These are the things the dry runs prov
 - **Case 5 trap ("Add Rest Api library"):** the Analyst chose Playwright's built-in `request` (APIRequestContext) and recorded it as a decision, not a deviation; Acceptance accepted it ("Playwright ships its own REST API client"). Decision 6 is therefore "agent decided: built-in client". The literal wording ("add … library") leans toward an extra dependency; Adam reviewed it and **confirmed the built-in client** (decision 6). Still worth comparing with the manual solution in section 9.
 - The worktree was removed on success, as designed; the result is on `ai/2026-11-26T04-05-03/integration` (local only, not pushed).
 
+### Build step 5: the Analyst's browser
+- `pipeline/analyst-mcp.json`: `@playwright/mcp@0.0.84` driving the **installed Google Chrome** (headless, `--isolated` in-memory profile). It uses the MCP's own recent Playwright, so the Chromium-119 crash doesn't apply to exploration. The orchestrator writes one config per case with that case's origins.
+- **Corrected assumption:** the plan treated `--allowed-origins` as the guard against `file://`. The MCP docs say it "does not serve as a security boundary". The `file://` protection is the MCP server's default refusal of files outside its workspace (smoke-tested: `file://` blocked, other origins `ERR_BLOCKED_BY_CLIENT`), plus our deny rules and the audit. Open question for Case 4: limiting origins also blocks guru99's ad/consent iframes, so the Analyst would see a cleaner page than the Coder's tests will. Revisit in build step 6.
+- `actionlint` 1.7.12 is now installed; run 3's merged workflow lints clean.
+
+### Run 4 (`2026-11-26T04-50-50`, Cases 1–2 from run 3's integration branch)
+- **Case 2 ACCEPTED and merged, with deviation D-2.6.** The Analyst *discovered* the footer trap by itself: the site renders `new Date().getFullYear()` (it read the app bundle), so 2023 is unobtainable. It amended to "current year computed at runtime" with screenshot + text evidence; the gate's spec↔README check passed. Acceptance **independently re-checked** the evidence (fetched the bundle) and answered yes to all three deviation questions. The Analyst also found a trap not in section 5: logged out, `/inventory.html` already shows an error, so a loose "an error is visible" check in 2.3 would pass without clicking Login. Review converged in 3 rounds under the scoped re-review rules.
+- **Case 1 failed: the Analyst ran out of turns** (50). Browser exploration costs a turn per action. Budget for Cases 1–4 is now 150.
+- **Pipeline bug found:** a failed agent's *untracked* files (Case 1's evidence screenshot) survived `git switch -f` and showed up in Case 2's branch, where the path guard would have blamed Case 2. Removed by hand mid-run; the orchestrator now commits a failed case's leftovers on its own branch and runs `git clean -fd`.
+
+### Run 5 (`2026-11-26T05-11-49`, Case 1 alone from run 4's integration branch)
+- Analyst DONE in 54 turns (so 50 really was too tight), Coder DONE, gate GREEN every round (3 repeats as `performance_glitch_user`, no flakiness; the Analyst measured its ~5 s busy-wait and planned a raised first-wait timeout instead of a sleep).
+- **Ended `needs-human`**, the first real use of that status: after 3 rounds one high issue was left. Step 1.5 should assert that each added product's button shows only "Remove" and no longer "Add to cart". That requirement comes from the *refined* spec, not the original ("add the following items to the cart", which 1.6's badge count and the cart page already prove). It's a judgment call for a human, which is what the status is for.
+
 ### Still open
-- `actionlint` is not installed on this machine (`brew install actionlint`); until then the gate only warns, which weakens the X1 check.
-- The Analyst runs headless with a narrow shell allow-list; compound commands are denied. Acceptable for now, revisit when the browser (build step 5) is added.
+- Case 1's `needs-human` decision (Adam).
+- The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
