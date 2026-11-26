@@ -22,7 +22,7 @@ export default defineConfig({
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: [/case-5-rest-api\.spec\.ts/, /case-3-editor\.spec\.ts/],
+      testIgnore: [/case-5-rest-api\.spec\.ts/, /case-3-editor\.spec\.ts/, /case-4-iframe-tabs\.spec\.ts/],
     },
     {
       name: 'api',
@@ -35,6 +35,13 @@ export default defineConfig({
       // Case 3 is a different host (the public online HTML editor), not the Swag Labs app.
       use: { ...devices['Desktop Firefox'], baseURL: 'https://onlinehtmleditor.dev' },
       testMatch: /case-3-editor\.spec\.ts/,
+    },
+    {
+      name: 'guru99',
+      // Case 4's step 4.1 entry point is demo.guru99.com; the test then follows
+      // in-page links to www.guru99.com, so only the entry navigation uses baseURL.
+      use: { ...devices['Desktop Firefox'], baseURL: 'http://demo.guru99.com' },
+      testMatch: /case-4-iframe-tabs\.spec\.ts/,
     },
   ],
 });

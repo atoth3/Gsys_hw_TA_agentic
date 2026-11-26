@@ -1,0 +1,169 @@
+{
+  "case": 4,
+  "summary": "Exercise iframe and tab handling on the Guru99 demo home page: open the address named in step 4.1, click the single clickable image inside the small iframe that sits just above the Email Submission heading, validate that the page it opens in a second tab carries the title of the Live Selenium Project page, close that tab and continue in the original one, then open the top menu's Testing drop-down by hovering it, click the Selenium item it reveals, and validate that the sign-up call-to-action button near the bottom of the page that loads is displayed. Two values the steps name no longer exist on the live site and are amended: the expected tab title (D-4.3) and the wide red Join Now button (D-4.6).",
+  "preconditions": [
+    "The suite's browser project from Case 0 (firefox) and the pinned @playwright/test 1.39.0; no new dependency.",
+    "Network access to demo.guru99.com and www.guru99.com; no account, cookie or consent step is needed.",
+    "The test starts from a fresh browser context with no ad blocker, so the page's own banner iframe (the one the heading 'iFrame will not show if you have adBlock extension enabled' refers to) is loaded."
+  ],
+  "steps": [
+    {
+      "id": "4.1",
+      "original": "Open this url http://demo.guru99.com/test/guru99home",
+      "refined": "The test's entry point is the address named in the step, opened directly (a different host from the project's configured base address, which belongs to the Swag Labs cases). The server answers an anonymous visitor with a 301 to the same path over https, so the loaded page settles on the https address with a trailing slash and shows the demo home page titled 'Demo Guru99 Page'. There is no login, cookie or consent wall. The tab opened here is the main window referred to in step 4.4."
+    },
+    {
+      "id": "4.2",
+      "original": "Locate the image inside the iframe near bottom of the page just above Email Submission and click on it",
+      "refined": "Near the bottom of that page, directly above the 'Email Submission' heading, sits a small banner iframe (750x110 px, its own document on the same host) whose entire content is one clickable image wrapped in a link. The test reaches into that iframe - not into the YouTube player iframe near the top of the page - and clicks that image. The iframe's document sets its links to open in a new browsing context, so the click opens a second browser tab instead of navigating in place."
+    },
+    {
+      "id": "4.3",
+      "original": "Verify new page is loaded in new tab with title: Selenium Live Project: FREE Real Time Project for Practice",
+      "refined": "The click of step 4.2 opens a second tab; the test waits for that tab and asserts that the loaded page's title is exactly the title of the Live Selenium Project page. The literal the step names no longer exists - the page is titled 'Selenium Live Project for Practice' today - so the expected title is amended to that value (deviation D-4.3). The page opened in step 4.1 stays open in the first tab."
+    },
+    {
+      "id": "4.4",
+      "original": "Close this tab and switch back to main window",
+      "refined": "The test closes the tab opened in step 4.3 and carries on in the tab opened in step 4.1, which still shows the demo home page; from here on all interaction happens in that tab, and it is the only one left open."
+    },
+    {
+      "id": "4.5",
+      "original": "From top menu click on Selenium link that can be seen while hovering on Testing menu item",
+      "refined": "Back in the main tab, the test hovers the top menu's 'Testing' item, which reveals its drop-down (the drop-down's items are parked far off-screen to the left until the parent item is hovered), and then clicks the item labelled exactly 'Selenium' in that drop-down - not the 'Selenium' entry in the dark strip at the very top of the page, which links nowhere, and not the drop-down's 'Live Selenium Project' entry. The click navigates the same tab to the Selenium tutorial page; no further tab is opened."
+    },
+    {
+      "id": "4.6",
+      "original": "Verify the wide red Join Now button is displayed near bottom of the page",
+      "refined": "On the page loaded by step 4.5 the test asserts that the page's sign-up call-to-action button near the bottom - the button labelled 'Subscribe for Free' in the newsletter block that is the last call to action before the footer link lists - is displayed. No 'Join Now' button exists anywhere on that page any more, so the element the check targets is amended to that button (deviation D-4.6). The element sits below the fold, so the check may need the page scrolled or the element brought into view first."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-4.1",
+      "step": "4.1",
+      "text": "The first page the test opens is the address named in step 4.1, and the demo home page it serves is loaded before the test interacts with it.",
+      "source": "original"
+    },
+    {
+      "id": "AC-4.2",
+      "step": "4.2",
+      "text": "The test clicks the clickable image inside the small banner iframe that sits just above the 'Email Submission' heading near the bottom of that page, reaching into the iframe's own document rather than clicking anything in the main document or in the video iframe near the top.",
+      "source": "original"
+    },
+    {
+      "id": "AC-4.3",
+      "step": "4.3",
+      "text": "After that click a second tab is open, and the test asserts that the page loaded in it has the title 'Selenium Live Project for Practice' (the step's literal amended by deviation D-4.3).",
+      "source": "original"
+    },
+    {
+      "id": "AC-4.4",
+      "step": "4.4",
+      "text": "The tab opened in step 4.3 is closed and the remaining steps run in the tab opened in step 4.1, which still shows the demo home page.",
+      "source": "original"
+    },
+    {
+      "id": "AC-4.5",
+      "step": "4.5",
+      "text": "In the main tab the test hovers the top menu's 'Testing' item and then clicks the 'Selenium' item the hover reveals in its drop-down, and the page that click loads is where the remaining check happens.",
+      "source": "original"
+    },
+    {
+      "id": "AC-4.6",
+      "step": "4.6",
+      "text": "The test asserts that the sign-up call-to-action button near the bottom of the page reached in step 4.5 - the one labelled 'Subscribe for Free' - is displayed (the step's element amended by deviation D-4.6).",
+      "source": "original"
+    }
+  ],
+  "observations": [
+    "Explored on 2026-11-26 in the Playwright MCP browser (headless Chrome, 1280x720, fresh profile) and with curl. The suite itself runs on the project browser firefox; nothing relied on below is browser-specific - the new tab comes from the iframe document's own base target, the drop-down from the page's CSS, and the page texts from the served HTML.",
+    "http://demo.guru99.com/test/guru99home answers 301 Moved Permanently to https://demo.guru99.com/test/guru99home; the browser settles on https://demo.guru99.com/test/guru99home/ (trailing slash). Title: 'Demo Guru99 Page'. No login, cookie banner or consent dialog; 11 console errors on load, all from third-party scripts, none blocking.",
+    "The page contains exactly 2 iframes: a YouTube player (src https://www.youtube.com/embed/RbSlW8jZFe8, 560x315) at document y 297, and a same-host banner iframe (src ads.html, id and name a077aa5e, 750x110) at document y 2499. The 'Email Submission' heading starts at document y 2659, directly below that second iframe; the document is 3467 px tall.",
+    "The banner iframe's whole document is: <head><base target=\"_blank\"></head><body><a href=\"http://www.guru99.com/live-selenium-project.html\"><img src=\"Jmeter720.png\"></a></body>. The image is 728x90 and has no alt text; the link has no target attribute of its own - the document-level <base target=\"_blank\"> is what makes the click open a new tab. The heading just above the iframe warns 'iFrame will not show if you have adBlock extension enabled'; with no ad blocker the iframe and image loaded on every visit.",
+    "Clicking that image opened a second tab at https://www.guru99.com/live-selenium-project.html (the http link 301-redirects to https behind Cloudflare). Its title and its h1 are both 'Selenium Live Project for Practice'. The string 'FREE Real Time Project' does not occur in the served HTML; the expected title of step 4.3 therefore no longer exists (deviation D-4.3). The first tab kept showing the demo page throughout; closing the second tab left exactly one tab.",
+    "Top menu of the demo page: Home, Testing, SAP, Web, Fun, Blog, Quiz, Execute online. The 'Testing' item links to https://www.guru99.com/software-testing.html and carries a CSS drop-down with Manual Testing, QTP, Selenium, Performance Testing, Quality Center, Mobile Testing, Live Testing Project, Test Management, Live Selenium Project and Enterprise Testing.",
+    "Before the hover, the drop-down's 'Selenium' item is rendered but parked off-screen at x = -16308 (y 345, 170x42); hovering 'Testing' moves it to x = 675, y = 345 inside the viewport. The item links to https://www.guru99.com/selenium-tutorial.html and has no target attribute, so the click navigates the same tab; afterwards one tab remains and its title is 'Selenium Tutorial - Guru99'.",
+    "A second link labelled 'Selenium' exists in the dark strip at the very top of the demo page, above the logo; its href is '#' and it leads nowhere. It is a decoy for step 4.5.",
+    "On https://www.guru99.com/selenium-tutorial.html the string 'Join Now' occurs zero times, both in the HTML served by curl and in the rendered page text after scrolling the whole document (height 5599 px on load, 6598 px once lazy content loaded). The only occurrence of 'join' is the heading 'Learn Selenium in 7 Days! / Join our FREE Course' of a block injected by a third-party script (absent from the served HTML) at y 2340 of 6598 - mid-page, with a wide red (rgb(244,53,0), 520 px) Submit button. There is no wide red element near the bottom; the only red control there is the 85 px 'Next' post-navigation link. See deviation D-4.6.",
+    "The last call to action before the footer link lists on that page is the newsletter block 'Sign up for the newsletter / Subscribe for Free / Chosen by over 350,000+ professionals': button#submitBtn, text 'Subscribe for Free', 270x52 px, background rgb(255,193,7), at document y 5753 (of 5599 px measured on load, i.e. at the very bottom of the document as first rendered). It comes from the page's own served HTML (<form id=\"makeForm\">), occurs exactly once, and is visible without any interaction, although it sits below the fold.",
+    "www.guru99.com sits behind Cloudflare (a __cf_bm cookie is set); no bot challenge or interstitial was served to the exploration browser or to curl. The selenium tutorial page shows no cookie banner and no fixed overlay that could intercept clicks."
+  ],
+  "ambiguities": [
+    {
+      "question": "Step 4.2 says 'the iframe', but the page has two. Which one holds the image to click?",
+      "decision": "The small banner iframe directly above the 'Email Submission' heading near the bottom of the page - the step locates it by exactly that landmark. The other iframe is the YouTube player near the top and holds no clickable image of this kind.",
+      "risk": "low"
+    },
+    {
+      "question": "Step 4.3 says 'with title: ...'. Exact title match, or does a substring suffice?",
+      "decision": "Exact equality against the amended literal 'Selenium Live Project for Practice'. The step quotes a complete page title, so the original strength is an equality check; only the value changes (D-4.3).",
+      "risk": "low"
+    },
+    {
+      "question": "Which 'Selenium' link does step 4.5 mean - the one in the dark strip at the very top, the drop-down's 'Selenium', or its 'Live Selenium Project'?",
+      "decision": "The drop-down item labelled exactly 'Selenium', because the step defines it as the link that becomes visible while hovering the 'Testing' menu item. The dark-strip link has href '#', and 'Live Selenium Project' is a different label.",
+      "risk": "low"
+    },
+    {
+      "question": "Must the drop-down really be opened by hovering, or may the test click the hidden link directly?",
+      "decision": "By hovering 'Testing' first: the step says so, and the drop-down item is parked ~16 000 px off-screen until the parent is hovered, so the hover is what makes it reachable the way a user reaches it.",
+      "risk": "low"
+    },
+    {
+      "question": "Does 'near bottom of the page' in step 4.6 have to be asserted (for example by comparing coordinates)?",
+      "decision": "No. The phrase tells the reader where the element sits; the verb of the step is 'is displayed', so the check is that the named element is displayed. Asserting a coordinate range would be an invented requirement.",
+      "risk": "low"
+    },
+    {
+      "question": "Step 4.6 names an element that no longer exists. Which element inherits the check?",
+      "decision": "The page's sign-up call-to-action near the bottom: the 'Subscribe for Free' button of the newsletter block. It is part of the page's own served HTML, occurs once and is the last call to action before the footer, so it keeps the step's position and role. The wide red 'Join our FREE Course' Submit button keeps the colour and the word 'join' but is injected by a third-party script and sits mid-page, which would trade a stable anchor for an unstable one. See D-4.6.",
+      "risk": "medium"
+    },
+    {
+      "question": "Step 4.1 names an http address that the server redirects to https. Should the test follow the redirect or assert the address?",
+      "decision": "Navigate to the address exactly as the step writes it and let the redirect happen; no step asks for a URL assertion, so none is made.",
+      "risk": "low"
+    },
+    {
+      "question": "Which browser project, given that the exploration ran in headless Chrome?",
+      "decision": "The suite's existing firefox project (chosen in Case 0 because the 1.39.0 Chromium build crashes locally), so one 'npm test' still runs everything. Nothing in the criteria depends on a Chrome-specific detail.",
+      "risk": "medium"
+    }
+  ],
+  "deviations": [
+    {
+      "step": "4.3",
+      "original": "Verify new page is loaded in new tab with title: Selenium Live Project: FREE Real Time Project for Practice",
+      "amended": "Verify new page is loaded in new tab with title: Selenium Live Project for Practice",
+      "why_unfulfillable": "The image in the iframe links to www.guru99.com/live-selenium-project.html, and on 2026-11-26 that page's title - in the browser and in the HTML served by curl - is 'Selenium Live Project for Practice'. The string 'FREE Real Time Project' occurs nowhere in the page, so the title the step names cannot be observed any more; the site renamed the page since the homework was written.",
+      "evidence": "docs/evidence/case-4/new-tab-title.md",
+      "why_this_amendment": "Only the expected literal changes, to the title the same page carries today; the step keeps its subject (a new tab opened by the click of 4.2) and its strength (an exact title comparison). A runtime-derived expectation is not an option here: deriving the title from the page under test would make the assertion tautological."
+    },
+    {
+      "step": "4.6",
+      "original": "Verify the wide red Join Now button is displayed near bottom of the page",
+      "amended": "Verify the sign-up call-to-action button near the bottom of the page - the button labelled 'Subscribe for Free' in the newsletter block - is displayed",
+      "why_unfulfillable": "The page reached in step 4.5 is www.guru99.com/selenium-tutorial.html, and on 2026-11-26 the string 'Join Now' occurs zero times there, both in the served HTML and in the rendered text after the whole document is scrolled. Nothing near the bottom is a wide red button: the last call to action before the footer is the 270x52 px amber 'Subscribe for Free' button, and the only red control in that region is an 85 px 'Next' link. The page was redesigned since the homework was written.",
+      "evidence": "docs/evidence/case-4/selenium-page-bottom-no-join-now.md",
+      "why_this_amendment": "The check keeps everything the step still allows: the same page, the same position (the last call to action before the footer), the same role (a free sign-up button) and the same strength (one is-displayed assertion on one named element). Only the element's identity moves to the button that occupies that place today, chosen because it is part of the page's own served HTML, while the one remaining wide red 'join' button is injected by a third-party script and sits mid-page."
+    }
+  ],
+  "test_data": {
+    "entry_page": "the address given in step 4.1 (http://demo.guru99.com/test/guru99home), opened directly rather than through the project's base address; the server 301-redirects it to https and the browser settles on https://demo.guru99.com/test/guru99home/",
+    "entry_page_title": "Demo Guru99 Page",
+    "target_iframe": "the small banner iframe just above the 'Email Submission' heading near the bottom of the entry page (same-host document ads.html, name/id a077aa5e, 750x110 px) - not the YouTube player iframe near the top",
+    "target_element_in_iframe": "the iframe's single clickable image (728x90, no alt text), wrapped in a link to http://www.guru99.com/live-selenium-project.html; the iframe document's <base target=\"_blank\"> makes the click open a new tab",
+    "new_tab_url": "https://www.guru99.com/live-selenium-project.html (the http link 301-redirects to https)",
+    "expected_new_tab_title": "Selenium Live Project for Practice (exact; the step's literal 'Selenium Live Project: FREE Real Time Project for Practice' is amended, see deviation D-4.3)",
+    "tabs_after_close": "one - the tab opened in step 4.1, still showing the demo home page",
+    "top_menu_hover_item": "Testing (top menu of the demo page, links to https://www.guru99.com/software-testing.html)",
+    "menu_link_to_click": "the drop-down item labelled exactly 'Selenium' (https://www.guru99.com/selenium-tutorial.html); it is parked off-screen at x = -16308 until 'Testing' is hovered",
+    "decoy_link": "a second link labelled 'Selenium' in the dark strip at the very top of the demo page, href '#', leads nowhere",
+    "page_after_menu_click": "https://www.guru99.com/selenium-tutorial.html, title 'Selenium Tutorial - Guru99', loaded in the same tab",
+    "expected_bottom_element": "the button labelled 'Subscribe for Free' in the 'Sign up for the newsletter' block, the last call to action before the footer link lists (button#submitBtn, 270x52 px, in the page's own served HTML); the step's 'wide red Join Now button' is amended, see deviation D-4.6",
+    "observed_bottom_element_position": "document y 5753, with the document 5599 px tall on load - below the fold, so the check may need the element brought into view",
+    "browser_project": "firefox (the project browser chosen in Case 0)"
+  },
+  "status": "DONE"
+}
