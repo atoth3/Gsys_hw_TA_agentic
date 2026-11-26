@@ -202,8 +202,9 @@ function acceptanceTable(a: Acceptance): string {
 // Entries ending in "/" are prefixes, others exact paths.
 function analystPaths(id: number) { return [`specs/case-${id}.json`, `specs/case-${id}.md`, `docs/evidence/case-${id}/`]; }
 function coderPaths(id: number) {
-  const base = ["tests/", "pages/", "utils/", "test/resources/", `docs/evidence/case-${id}/`, "package.json", "package-lock.json"];
-  return id === 0 ? [...base, "playwright.config.ts", "tsconfig.json", ".github/workflows/", ".gitignore", ".nvmrc"] : base;
+  // playwright.config.ts for every case: proportionality wants baseURL/timeouts in the config, not in tests.
+  const base = ["tests/", "pages/", "utils/", "test/resources/", `docs/evidence/case-${id}/`, "package.json", "package-lock.json", "playwright.config.ts"];
+  return id === 0 ? [...base, "tsconfig.json", ".github/workflows/", ".gitignore", ".nvmrc"] : base;
 }
 const readmeKey = (h2: string, id: number) => `${h2}/Case ${id}`;
 function analystReadme(id: number) { return [readmeKey("Requirement deviations", id)]; }
