@@ -411,7 +411,34 @@ function analystToolsNote(id: number) {
   if (id === 0) return "No browser for this case. Shell: `curl` (for documentation pages), `npm view <package>` (published versions, engines), `mkdir`, `date`.\n" +
     "How Case 0 is verified (fixed by the pipeline, so plan your refined steps around it): the pipeline's gate checks the exact Playwright pin in package.json and the lockfile, that an `npm test` script exists and runs the suite, `tsc`, and lints the workflow with `actionlint`; the CI run itself proves X1. Playwright tests must NOT parse package.json or workflow YAML. The single smoke test opens a real page in the chosen browser. For each 0.x / X1 step, say in `refined` which of these verifies it.";
   if (id === 5) return "No browser for this case: it is an HTTP API, explore it with `curl`. Shell: `curl`, `mkdir`, `date`.";
-  return "No browser yet (pipeline build step 5 adds one): use `curl` to fetch pages. Shell: `curl`, `mkdir`, `date`.";
+  return `Browser: the Playwright MCP tools (\`mcp__playwright__*\`) drive a real, headless Chrome with a fresh in-memory profile. Requests are limited to the case site's origins (${caseOrigins(HOMEWORK.get(id)!).join(", ")}). Explore the page the way a user would: navigate, read the accessibility snapshot, click, type, wait.
+Evidence: save screenshots with an EXPLICIT file name under \`docs/evidence/case-${id}/\` (for example \`docs/evidence/case-${id}/footer.png\`); keep them few and small. Shell: \`curl\`, \`mkdir\`, \`date\`.`;
+}
+
+// ① Analyst browser (build step 5): Playwright MCP for the Analyst only, one config per case with that case's origins.
+// --allowed-origins is NOT a security boundary (the MCP docs say so): it keeps exploration on the case site.
+// The file:// guard is the MCP server's default restriction on files outside its workspace, plus DENY + the audit.
+function caseOrigins(def: CaseDef): string[] {
+  const origins = new Set<string>();
+  for (const u of def.text.match(/https?:\/\/[^\s)`<>]+/g) ?? []) {
+    const url = new URL(u);
+    origins.add(`https://${url.host}`); // http:// sites usually redirect to https
+    if (url.protocol === "http:") origins.add(`http://${url.host}`);
+  }
+  return [...origins];
+}
+function analystArgs(c: CaseState): string[] {
+  const id = c.def.id;
+  if (id === 0 || id === 5) return ROLE_ARGS.analyst;
+  const outDir = join(caseDir(id), "mcp-output");
+  mkdirSync(outDir, { recursive: true });
+  const cfg = readFileSync(join(PIPE, "analyst-mcp.json"), "utf8")
+    .replace("{{ORIGINS}}", caseOrigins(c.def).join(";")).replace("{{OUTPUT_DIR}}", outDir);
+  const file = join(caseDir(id), "analyst-mcp.json");
+  writeFileSync(file, cfg);
+  const args = [...ROLE_ARGS.analyst];
+  args.splice(args.indexOf("--allowedTools") + 1, 0, "mcp__playwright"); // all tools of that one server
+  return ["--mcp-config", file, ...args];
 }
 
 function earlierSpecs(id: number): string {
@@ -448,7 +475,7 @@ function runAnalyst(c: CaseState): any {
   }) + `\n\n${SHARED.ISOLATION}\n\n${ENV_BLOCK}\n\n${SHARED.UNATTENDED}`;
   const from = head();
   let r = track(c, claude({ step: `Case ${id} › Analyst`, prompt: base, cwd: WT, logBase: join(caseDir(id), "analyst"),
-    args: ROLE_ARGS.analyst, model: MODELS.analyst, maxTurns: TURNS.analyst, timeoutMs: TIMEOUT_MS }));
+    args: analystArgs(c), model: MODELS.analyst, maxTurns: TURNS.analyst, timeoutMs: TIMEOUT_MS }));
   // One repair attempt for contract errors (resumed, so it keeps its exploration).
   for (let attempt = 1; ; attempt++) {
     commit(WT, `Case ${id}: analyst spec${attempt > 1 ? ` (repair ${attempt - 1})` : ""}`);
@@ -471,7 +498,7 @@ function runAnalyst(c: CaseState): any {
     if (attempt === 2) { c.analyst = "✗ contract"; failCase(c, `Analyst broke the contract: ${errors.join("; ")}`); }
     r = track(c, claude({ step: `Case ${id} › Analyst (repair)`, cwd: WT, logBase: join(caseDir(id), "analyst-repair"),
       prompt: `The pipeline rejected your spec. Fix ONLY these contract errors, then end with the STATUS line:\n${errors.map((e) => `- ${e}`).join("\n")}\n\n${SHARED.UNATTENDED}`,
-      args: ROLE_ARGS.analyst, model: MODELS.analyst, maxTurns: 20, timeoutMs: TIMEOUT_MS, resumeId: r.sessionId }));
+      args: analystArgs(c), model: MODELS.analyst, maxTurns: 20, timeoutMs: TIMEOUT_MS, resumeId: r.sessionId }));
   }
 }
 

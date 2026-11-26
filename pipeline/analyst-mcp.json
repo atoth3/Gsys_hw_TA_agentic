@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.84",
+        "--browser", "chrome",
+        "--headless",
+        "--isolated",
+        "--allowed-origins", "{{ORIGINS}}",
+        "--output-dir", "{{OUTPUT_DIR}}"
+      ]
+    }
+  }
+}
