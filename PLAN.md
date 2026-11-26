@@ -666,6 +666,9 @@ The plan was written before any code ran. These are the things the dry runs prov
 - In both, the Analyst explored normally but slowly (about 26–30 browser actions in 20 minutes, against 54 turns in 8.6 minutes in run 5). Then a single request stalled: one `api_retry` event with `error: "unknown"`, then silence until the 30-minute agent timeout killed it. The Claude 5-hour window was at about 80% at the time (resets 10:00), which may explain the slowness. Neither the Coder nor the Reviewer ever ran.
 - **Fix:** agents now run in **15-minute time slices**. A slice that times out is **resumed in the same session** (`claude --resume`, "continue where you left off"), up to 3 times (`AGENT_MAX_RESUMES`), so the agent keeps its work. The partial transcript of a timed-out slice is now audited too (before, a timeout skipped the contamination audit). Tested with a deliberately short slice.
 
+### Run 8 (`2026-11-26T07-56-06`, Case 1, `MAX_ROUNDS=4`): stopped by the Claude usage limit
+- The Analyst finished without a stall (10 min, 75 turns), Coder DONE, gate GREEN twice. Review went from 6 high issues (r1) to 3 (r2), then Coder fix r2 failed with "You've hit your session limit · resets 10am". The orchestrator recorded the failure and wrote the report as designed. Worktree and branches kept.
+
 ### Still open
-- Case 1: the run with 4 review rounds is still to do (the `needs-human` result from run 5 is kept on `ai/2026-11-26T05-11-49/case-1-purchase`).
+- Case 1: rerun after 10:00 (same command). The run with 4 review rounds is still to do (the `needs-human` result from run 5 is kept on `ai/2026-11-26T05-11-49/case-1-purchase`).
 - The Analyst's narrow shell allow-list still denies compound commands; harmless so far.
