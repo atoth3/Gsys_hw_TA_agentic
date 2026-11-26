@@ -1,0 +1,173 @@
+{
+  "case": 1,
+  "summary": "Automate the Swag Labs purchase process end to end as the performance_glitch_user: open the inventory URL (which bounces an anonymous visitor to the login page), log in with credentials read at runtime from a committed credential.json, add Sauce Labs Backpack and Sauce Labs Fleece Jacket, validate that the cart badge shows 2, walk the whole checkout (cart -> customer information -> overview -> finish) and validate that the order-confirmation message \"Thank you for your order!\" is shown.",
+  "preconditions": [
+    "Case 0 is merged: the project runs on @playwright/test 1.39.0 with a single browser project, Firefox, and a base address already pointing at the Swag Labs host; the suite runs via `npm test` locally and in CI.",
+    "The Swag Labs demo site is reachable and publishes the credentials this case uses on its own login page (accepted usernames include performance_glitch_user, password for all users secret_sauce).",
+    "performance_glitch_user is a deliberately slow account: the login submit takes roughly ten seconds before the inventory page is rendered (see observations), so the test and its waits must tolerate that without shortening or skipping any check.",
+    "Each test run starts from a fresh browser profile, so the first navigation is always made by an anonymous visitor."
+  ],
+  "steps": [
+    {
+      "id": "1.1",
+      "original": "Open the url: https://www.saucedemo.com/inventory.html",
+      "refined": "The test's entry point is the inventory page address named in the step. Opened by an anonymous visitor, the site answers it by sending the browser to the login page and showing the alert \"Epic sadface: You can only access '/inventory.html' when you are logged in.\"; the test therefore opens that address first and continues with the login that steps 1.3-1.4 require, ending up on the inventory page itself."
+    },
+    {
+      "id": "1.2",
+      "original": "Create a credential.json file in test/resources folder and store: { username: performance_glitch_user, password: secret_sauce }",
+      "refined": "A file named credential.json exists in the repository under the test/resources folder named by the step, holding exactly the two fields the step lists - username performance_glitch_user and password secret_sauce - written as valid JSON so that step 1.3 can parse it. The file is committed with the project (it contains only the demo credentials the site itself publishes on its login page)."
+    },
+    {
+      "id": "1.3",
+      "original": "Parse the credentials from credential.json and use it for the following test",
+      "refined": "The username and password the test logs in with are obtained by reading and parsing that credential file at run time; neither value appears as a literal in the test. Changing a value in the file changes what the test types."
+    },
+    {
+      "id": "1.4",
+      "original": "On the website type username and password and click on login button",
+      "refined": "On the login page the test types the parsed username into the Username field and the parsed password into the Password field, then clicks the Login button, and waits for the resulting product listing to appear (the submit takes about ten seconds for this account)."
+    },
+    {
+      "id": "1.5",
+      "original": "Add the following items to the cart: Sauce Labs Backpack, Sauce Labs Fleece Jacket",
+      "refined": "From the product listing the test adds the two products named in the step - Sauce Labs Backpack and Sauce Labs Fleece Jacket - to the cart using each product's own add-to-cart control, and adds no other product, so the cart holds exactly those two items."
+    },
+    {
+      "id": "1.6",
+      "original": "Validate the number on the cart symbol",
+      "refined": "The test asserts that the number shown on the cart symbol in the page header equals the number of items added in step 1.5, i.e. 2."
+    },
+    {
+      "id": "1.7",
+      "original": "Go through the checkout process",
+      "refined": "The test completes the site's whole checkout sequence without shortcuts: it opens the cart from the cart symbol, starts the checkout, fills the three mandatory customer-information fields (first name, last name, postal code), continues to the order overview and finishes the order, arriving at the order-completion page."
+    },
+    {
+      "id": "1.8",
+      "original": "Validate that Thank you for your order message is appearing",
+      "refined": "On the order-completion page the test asserts that the order-confirmation message is visible and that its text is the step's message, as the site writes it: \"Thank you for your order!\"."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1.1",
+      "step": "1.1",
+      "text": "The first page the test opens is the inventory page address named in step 1.1, and the test proceeds from the login page the site shows an anonymous visitor there.",
+      "source": "original"
+    },
+    {
+      "id": "AC-1.2",
+      "step": "1.2",
+      "text": "A committed file named credential.json lives in the test/resources folder and contains, as parsable JSON, the username performance_glitch_user and the password secret_sauce.",
+      "source": "original"
+    },
+    {
+      "id": "AC-1.3",
+      "step": "1.3",
+      "text": "The credentials the test logs in with are read and parsed from that credential.json at run time, and neither the username nor the password is written as a literal anywhere in the test.",
+      "source": "original"
+    },
+    {
+      "id": "AC-1.4",
+      "step": "1.4",
+      "text": "The test types the parsed username and password into the login form's username and password fields and clicks the login button, after which the product listing is shown.",
+      "source": "original"
+    },
+    {
+      "id": "AC-1.5",
+      "step": "1.5",
+      "text": "The test adds exactly the products Sauce Labs Backpack and Sauce Labs Fleece Jacket to the cart, each through its own add-to-cart control, and adds no further product.",
+      "source": "original"
+    },
+    {
+      "id": "AC-1.6",
+      "step": "1.6",
+      "text": "The test asserts that the number displayed on the cart symbol is 2, the count of items added in step 1.5.",
+      "source": "original"
+    },
+    {
+      "id": "AC-1.7",
+      "step": "1.7",
+      "text": "The test goes through every stage of the checkout the site requires - cart, customer information with all three mandatory fields filled, order overview, finish - and reaches the order-completion page.",
+      "source": "original"
+    },
+    {
+      "id": "AC-1.8",
+      "step": "1.8",
+      "text": "The test asserts that the order-confirmation message \"Thank you for your order!\" is visible on the completion page.",
+      "source": "original"
+    }
+  ],
+  "observations": [
+    "2026-11-26: opening the inventory page address as an anonymous visitor does not render the inventory; the browser ends on the site root (the login page) and the form shows the alert \"Epic sadface: You can only access '/inventory.html' when you are logged in.\" with a \"Dismiss error\" button. No HTTP error, no interstitial.",
+    "The login page itself publishes the data this case uses: a heading \"Accepted usernames are:\" followed by standard_user, locked_out_user, problem_user, performance_glitch_user, error_user, visual_user, and \"Password for all users:\" secret_sauce.",
+    "Login form fields are accessibly named \"Username\" and \"Password\"; the submit control is a button named \"Login\".",
+    "Logging in as performance_glitch_user / secret_sauce succeeds and lands on the inventory page, which lists 6 products, each with its own \"Add to cart\" button; the header shows \"Products\", a sort combobox and the cart symbol.",
+    "The two products named in step 1.5 are present with those exact titles: \"Sauce Labs Backpack\" ($29.99) and \"Sauce Labs Fleece Jacket\" ($49.99).",
+    "The cart symbol carries no number while the cart is empty (its accessible name is then \"Cart, empty\"). After adding the two products it reads \"Cart, 2 items\" and contains a badge element whose visible text is exactly \"2\".",
+    "The badge updates immediately on add-to-cart (observed within the same automation round trip, well under a second).",
+    "Checkout observed in full: cart page (heading \"Your Cart\", listing both items at quantity 1, buttons \"Continue Shopping\" and \"Checkout\") -> \"Checkout: Your Information\" with three textboxes \"First Name\", \"Last Name\", \"Zip/Postal Code\" and buttons \"Cancel\"/\"Continue\" -> \"Checkout: Overview\" (payment SauceCard #31337, Free Pony Express Delivery, Item total $79.98, Tax $6.40, Total $86.38) with buttons \"Cancel\"/\"Finish\" -> \"Checkout: Complete!\". Filling First Name \"Test\", Last Name \"User\", Zip \"1234\" was accepted.",
+    "The completion page shows a level-2 heading whose exact text is \"Thank you for your order!\" (the step's wording plus an exclamation mark), followed by \"Your order has been dispatched, and will arrive just as fast as the pony can get there!\", plus \"Back Home\" and \"Generate PDF order\" buttons. The cart badge is gone at that point.",
+    "Timing of the slow account, measured in the page: a timestamp taken immediately before the login click, compared after the inventory listing had rendered, gave ~11.6 s (including one automation round trip), i.e. roughly ten seconds of deliberate delay in the login submit. Every later transition in the flow (add to cart, open cart, checkout steps) completed in well under a second, so the slowness is specific to the login submit, not to the whole session.",
+    "No cookie or consent banner, no iframe and no third-party overlay appeared anywhere in the flow. The only console output is one repeated harmless error per page load (\"Permissions policy violation: unload is not allowed in this document\")."
+  ],
+  "ambiguities": [
+    {
+      "question": "Step 1.1 says open the inventory page, but steps 1.3-1.4 require logging in - and an anonymous visitor who opens the inventory address is sent to the login page with an error. Which page should the test actually start on?",
+      "decision": "Start exactly where step 1.1 says: open the inventory address, let the site redirect to the login page, log in there, and arrive on the inventory page. The step is an instruction to open that URL, not a claim that the inventory renders anonymously, and the redirect is the site's documented behaviour, so no amendment is needed.",
+      "risk": "low"
+    },
+    {
+      "question": "The credential block in step 1.2 is not valid JSON (unquoted keys and values), yet step 1.3 says to parse credential.json.",
+      "decision": "Store the same two fields and values as valid JSON. Parsing is explicitly required by 1.3, and only valid JSON can be parsed; the field names and values stay exactly as the step writes them.",
+      "risk": "low"
+    },
+    {
+      "question": "The step names the folder test/resources, while the suite's specs live in a tests folder.",
+      "decision": "Use the path the requirement names literally - test/resources/credential.json - because the case is graded against the original wording and the file is data, not a spec that the runner has to discover.",
+      "risk": "low"
+    },
+    {
+      "question": "Should credential.json be committed, given that it holds a username and a password?",
+      "decision": "Commit it. Step 1.2 asks for the file to be part of the project, and the values are the demo credentials the site prints on its own login page, so nothing secret is exposed. The repository's ignore rules must not exclude it, otherwise step 1.3 would have nothing to parse on a clean CI checkout.",
+      "risk": "low"
+    },
+    {
+      "question": "\"Validate the number on the cart symbol\" (1.6) - validate against what?",
+      "decision": "Against the number of items step 1.5 adds: the badge must read 2. Taking the site's current value as the expectation would make the check vacuous; the requirement's strength is an equality, so the expected number comes from the two products the test added.",
+      "risk": "low"
+    },
+    {
+      "question": "Step 1.7 does not give customer information for the checkout form, which demands first name, last name and postal code.",
+      "decision": "Choose neutral placeholder values (First Name \"Test\", Last Name \"User\", Zip \"1234\"), verified today as accepted. The requirement puts no constraint on them and the site does not validate their content, only their presence.",
+      "risk": "low"
+    },
+    {
+      "question": "Step 1.8 writes \"Thank you for your order\" while the page says \"Thank you for your order!\".",
+      "decision": "Assert the message as the site writes it, including the exclamation mark - the step's wording is contained in it verbatim, so this keeps the check exact rather than loosening it to a partial match.",
+      "risk": "low"
+    },
+    {
+      "question": "Does the ten-second login delay of performance_glitch_user justify relaxing anything?",
+      "decision": "No. The account is named by the requirement, so its slowness is part of the case: the test waits for the inventory listing with a budget that comfortably exceeds the observed delay. No assertion is weakened and no step is skipped.",
+      "risk": "medium"
+    }
+  ],
+  "deviations": [],
+  "test_data": {
+    "entry_page": "the inventory page address given in step 1.1 (https://www.saucedemo.com/inventory.html)",
+    "credential_file": "test/resources/credential.json (committed, valid JSON)",
+    "username": "performance_glitch_user",
+    "password": "secret_sauce",
+    "products_to_add": ["Sauce Labs Backpack", "Sauce Labs Fleece Jacket"],
+    "expected_cart_badge_number": "2",
+    "checkout_first_name": "Test",
+    "checkout_last_name": "User",
+    "checkout_postal_code": "1234",
+    "expected_confirmation_message": "Thank you for your order!",
+    "browser_project": "firefox (the project browser chosen in Case 0)",
+    "observed_login_delay": "~10 s between the login click and the rendered inventory listing for performance_glitch_user"
+  },
+  "status": "DONE"
+}
