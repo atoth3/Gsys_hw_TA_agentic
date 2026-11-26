@@ -22,6 +22,13 @@ export default defineConfig({
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: /case-5-rest-api\.spec\.ts/,
+    },
+    {
+      name: 'api',
+      // Case 5 is a REST API test against a different host; no browser is launched for it.
+      use: { baseURL: 'https://jsonplaceholder.typicode.com' },
+      testMatch: /case-5-rest-api\.spec\.ts/,
     },
   ],
 });
